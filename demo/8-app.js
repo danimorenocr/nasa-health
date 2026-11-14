@@ -1,0 +1,44 @@
+const $=id=>document.getElementById(id);
+const TOKEN_KEY='space-health-demo-session-v2';
+let token=sessionStorage.getItem(TOKEN_KEY),pending=null,busy=false;
+async function api(path,method='GET',body){
+ const r=await fetch(`/api/v1/${path}`,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const data=r.status===204?null:await r.json();
+ if(!r.ok){const e=new Error(data?.detail||'No se pudo completar la solicitud.');e.status=r.status;throw e;}
+ return data;
+}
+function show(message,urgent=false){$('response').hidden=false;$('response').textContent=message;$('response').className=urgent?'urgent':'';}
+function recordResponse(data){$('api-response').textContent=JSON.stringify(data,null,2);}
+function disable(value){busy=value;for(const id of ['submit','export','reset','sleep-analyze','sleep-synthetic'])$(id).disabled=value||!token;for(const b of $('confirm-form').querySelectorAll('button'))b.disabled=value;}
+function clearPending(){pending=null;$('confirm-form').hidden=true;$('origin').value='';$('context').value='';$('measured-at').value='';}
+async function refresh(){const data=await api('entries');$('count').textContent=String(data.count);$('entries').replaceChildren();if(!data.count){const p=document.createElement('p');p.textContent='Sin registros. Una entrada enviada no se guarda hasta confirmarla.';$('entries').append(p);}
+ for(const entry of data.entries){const article=document.createElement('article'),p=document.createElement('p'),small=document.createElement('small');p.textContent=entry.candidate.original_text;small.textContent=`${entry.origin} · medición: ${new Date(entry.measured_at).toLocaleString('es-CO')}${entry.context?' · '+entry.context:''}`;article.append(p,small);$('entries').append(article);}}
+async function newSession(){const s=await api('sessions','POST');token=s.token;sessionStorage.setItem(TOKEN_KEY,token);}
+async function start(){try{if(token){try{await api('session');}catch(e){if(e.status!==401)throw e;token=null;sessionStorage.removeItem(TOKEN_KEY);show('La sesión anterior venció o fue eliminada. Se inició una nueva.');}}
+ if(!token)await newSession();$('status').textContent='Backend conectado · SQLite local · sesión 30 días';disable(false);await refresh();const c=await api('capabilities');for(const source of c.sources){const p=document.createElement('p'),a=document.createElement('a');a.href=source.url;a.textContent=source.title;a.target='_blank';a.rel='noopener noreferrer';p.append(a,document.createTextNode(' · '+source.scope));$('sources').append(p);}for(const text of c.limitations){const li=document.createElement('li');li.textContent=text;$('limitations').append(li);}}catch(e){$('status').textContent=e.message;}}
+$('message-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;disable(true);try{clearPending();const data=await api('messages','POST',{text:$('text').value});recordResponse(data);show(data.message,data.status==='safety_notice');if(data.pending_id){pending=data.pending_id;$('candidate').textContent=JSON.stringify(data.candidate,null,2);$('confirm-form').hidden=false;}}catch(e){show(e.message);}finally{disable(false);}});
+$('confirm-form').addEventListener('submit',async e=>{e.preventDefault();if(busy||!pending)return;disable(true);try{const date=$('measured-at').value;const data=await api('confirmations','POST',{pending_id:pending,confirmed:true,origin:$('origin').value,context:$('context').value,...(date?{measured_at:new Date(date).toISOString()}:{})});recordResponse(data);clearPending();show(data.message);$('text').value='';await refresh();}catch(e){show(e.message);}finally{disable(false);}});
+$('cancel').addEventListener('click',async()=>{if(busy)return;disable(true);try{await api('pending','DELETE');clearPending();show('Entrada descartada. No se guardó.');}catch(e){show(e.message);}finally{disable(false);}});
+for(const b of document.querySelectorAll('[data-example]'))b.addEventListener('click',()=>{$('text').value=b.dataset.example;$('text').focus();});
+$('export').addEventListener('click',async()=>{if(busy)return;disable(true);try{const data=await api('export'),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='bitacora-prueba.json';a.click();URL.revokeObjectURL(url);show('JSON descargado. Archivo local con todos los registros de esta sesión.');}catch(e){show(e.message);}finally{disable(false);}});
+$('reset').addEventListener('click',async()=>{if(busy||!confirm('¿Borrar todos los registros y propuestas de esta sesión en SQLite?'))return;disable(true);try{await api('session','DELETE');sessionStorage.removeItem(TOKEN_KEY);token=null;await newSession();clearPending();recordResponse({status:'session_reset'});await refresh();$('history').textContent='Sin consulta.';show('Sesión borrada de la base local. Se inició una sesión vacía. Los archivos JSON descargados no se borran automáticamente.');}catch(e){show(e.message);}finally{disable(false);}});
+$('history-form').addEventListener('submit',async e=>{e.preventDefault();if(busy||!token)return;disable(true);try{const data=await api(`history?metric=${encodeURIComponent($('metric').value)}&days=30`);$('history').textContent=JSON.stringify(data,null,2);recordResponse(data);}catch(e){show(e.message);}finally{disable(false);}});
+start();
+
+$('research-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;disable(true);const box=$('research');box.textContent='Consultando OSDR (puede tardar hasta 25 segundos)…';try{const data=await api(`research/studies/${encodeURIComponent($('accession').value)}`);recordResponse(data);box.replaceChildren();for(const text of [data.title,`Organismo: ${data.organisms.join(', ')} · Material: ${data.materials.join(', ')}`,`Técnicas: ${data.technologies.join(', ')}`,`Recuperado: ${data.retrieved_at} · ${data.cached?'Copia local':'Consulta real a NASA'}${data.stale?' · DESACTUALIZADO, OSDR no disponible':''}`,`Archivos: ${data.file_count_total??"no verificado"} en la fuente; ${data.files.length} listados${data.files_truncated?" (lista limitada)":""}. No se descargaron mediciones ni se entrenó un modelo.`,...data.description]){const p=document.createElement('p');p.textContent=text;box.append(p);}for(const [label,url]of [['Fuente API',data.api_url],['Términos y cita de datos',data.reuse.terms_url]]){const p=document.createElement('p'),a=document.createElement('a');a.textContent=label;a.href=url;a.target='_blank';a.rel='noopener noreferrer';p.append(a);box.append(p);}const note=document.createElement('p');note.className='notice';note.textContent='Investigación, no protocolo clínico ni conexión a signos vitales. '+data.reuse.note;box.append(note);if(data.files_error){const p=document.createElement('p');p.textContent=data.files_error;box.append(p);}}catch(e){box.textContent=e.message;}finally{disable(false);}});
+
+async function sleepAnalyze(){try{
+ const off=-new Date().getTimezoneOffset(),a=await api(`analysis/sleep?days=7&tz_offset_minutes=${off}`),p=a.personal_calculation;
+ recordResponse(a);$('sleep-out').hidden=false;$('sleep-personal').textContent=p.message;
+ const bars=$('sleep-bars');bars.replaceChildren();
+ for(const n of p.nights){const row=document.createElement('div');row.className='bar-row';const d=document.createElement('span');d.textContent=n.date.slice(5);const b=document.createElement('span');b.className='bar';b.style.width=`${Math.min(100,n.hours/12*100)}%`;const v=document.createElement('span');v.textContent=`${String(n.hours).replace('.',',')} h`;row.append(d,b,v);bars.append(row);}
+ const bits=[`Cobertura: ${p.nights_recorded} de ${p.days_in_window} días.`,'Fechas por medición declarada, no verificada como noche.'];
+ if(p.naps_excluded.length)bits.push(`${p.naps_excluded.length} siesta(s) aparte.`);
+ if(p.duplicates_collapsed)bits.push(`${p.duplicates_collapsed} duplicado(s) contados una vez.`);
+ $('sleep-detail').textContent=bits.join(' ');
+ $('sleep-edu').textContent=a.education.text;$('sleep-scope').textContent=a.education.scope;
+ const src=(await api('capabilities')).sources.find(s=>s.id===a.education.source_id);$('sleep-link').href=src.url;$('sleep-link').textContent=src.title;
+ $('sleep-cannot').replaceChildren(...a.cannot_conclude.map(t=>{const li=document.createElement('li');li.textContent=t;return li;}));
+}catch(e){show(e.message);}}
+$('sleep-analyze').addEventListener('click',sleepAnalyze);
+$('sleep-synthetic').addEventListener('click',async()=>{try{await api('synthetic/sleep','POST');await refresh();await sleepAnalyze();}catch(e){show(e.message);}});
