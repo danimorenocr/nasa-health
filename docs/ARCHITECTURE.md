@@ -10,7 +10,7 @@ Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlc
 - `entry`: candidato confirmado, origen, contexto, fecha de medición UTC y de registro UTC. Índice por sesión y fecha. Clave foránea con borrado en cascada.
 - `research_cache`: documento de metadatos públicos, identificador y fecha. No se relaciona con sesiones ni lecturas personales.
 
-Ruta por defecto: `data/health.sqlite3`; configurable con `DATABASE_PATH`. Datos/archivos auxiliares, caches y entornos están excluidos del ZIP y `.gitignore`. Un reinicio conserva registros; 24 h sin acceso autenticado caducan la sesión, que se depura al siguiente acceso autenticado o creación de sesión. Borrar sesión borra sus registros/propuesta, no metadatos públicos OSDR ni archivos JSON ya exportados. SQLite usa foreign_keys, WAL y secure_delete; no promete borrado forense de discos, copias o descargas.
+Ruta por defecto: `data/health.sqlite3`; configurable con `DATABASE_PATH`. Datos/archivos auxiliares, caches y entornos están excluidos del ZIP y `.gitignore`. Un reinicio conserva registros; 30 días sin acceso autenticado (`SESSION_TTL_DAYS`) caducan la sesión, que se depura al siguiente acceso autenticado o creación de sesión. Borrar sesión borra sus registros/propuesta, no metadatos públicos OSDR ni archivos JSON ya exportados. SQLite usa foreign_keys, WAL y secure_delete; no promete borrado forense de discos, copias o descargas.
 
 El token vive solo en `sessionStorage` del navegador; persiste al recargar la misma pestaña, no constituye recuperación de cuenta. Si desaparece, no se puede recuperar esa sesión desde la demo. No hay registro, roles, personas reales, sincronización ni vinculación a astronautas reales.
 
