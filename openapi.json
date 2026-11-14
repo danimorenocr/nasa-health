@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Salud espacial - backend textual de prueba",
-    "description": "Solo datos ficticios. No diagnóstico, triage, ML, LLM ni voz. Persistencia SQLite local.",
+    "description": "Solo datos ficticios. No diagnóstico, triage, ML ni LLM; sin procesamiento de voz en el servidor. Persistencia SQLite local.",
     "version": "0.3.0"
   },
   "paths": {

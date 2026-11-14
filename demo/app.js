@@ -10,13 +10,13 @@ async function api(path,method='GET',body){
 function show(message,urgent=false){$('response').hidden=false;$('response').textContent=message;$('response').className=urgent?'urgent':'';}
 function recordResponse(data){$('api-response').textContent=JSON.stringify(data,null,2);}
 function disable(value){busy=value;for(const id of ['submit','export','reset','analyze','synthetic'])$(id).disabled=value||!token;for(const b of $('confirm-form').querySelectorAll('button'))b.disabled=value;}
-function clearPending(){pending=null;$('confirm-form').hidden=true;$('origin').value='';$('context').value='';$('measured-at').value='';}
+function clearPending(){pending=null;$('confirm-form').hidden=true;$('origin').value='';$('context').value='';$('measured-at').value='';$('voice-confirm-hint').hidden=true;dictated=false;}
 async function refresh(){const data=await api('entries');$('count').textContent=String(data.count);$('entries').replaceChildren();if(!data.count){const p=document.createElement('p');p.textContent='Sin registros. Una entrada enviada no se guarda hasta confirmarla.';$('entries').append(p);}
  for(const entry of data.entries){const article=document.createElement('article'),p=document.createElement('p'),small=document.createElement('small');p.textContent=entry.candidate.original_text;small.textContent=`${entry.origin} · medición: ${new Date(entry.measured_at).toLocaleString('es-CO')}${entry.context?' · '+entry.context:''}`;article.append(p,small);$('entries').append(article);}}
 async function newSession(){const s=await api('sessions','POST');token=s.token;sessionStorage.setItem(TOKEN_KEY,token);}
 async function start(){try{if(token){try{await api('session');}catch(e){if(e.status!==401)throw e;token=null;sessionStorage.removeItem(TOKEN_KEY);show('La sesión anterior venció o fue eliminada. Se inició una nueva.');}}
  if(!token)await newSession();$('status').textContent='Backend conectado · SQLite local · sesión 30 días';disable(false);await refresh();const c=await api('capabilities');for(const source of c.sources){const p=document.createElement('p'),a=document.createElement('a');a.href=source.url;a.textContent=source.title;a.target='_blank';a.rel='noopener noreferrer';p.append(a,document.createTextNode(' · '+source.scope));$('sources').append(p);}for(const text of c.limitations){const li=document.createElement('li');li.textContent=text;$('limitations').append(li);}}catch(e){$('status').textContent=e.message;}}
-$('message-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;disable(true);try{clearPending();const data=await api('messages','POST',{text:$('text').value});recordResponse(data);show(data.message,data.status==='safety_notice');if(data.pending_id){pending=data.pending_id;$('candidate').textContent=JSON.stringify(data.candidate,null,2);$('confirm-form').hidden=false;}}catch(e){show(e.message);}finally{disable(false);}});
+$('message-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;if(listening&&rec)rec.stop();const wasDictated=dictated;disable(true);try{clearPending();const data=await api('messages','POST',{text:$('text').value});recordResponse(data);show(data.message,data.status==='safety_notice');if(data.pending_id){pending=data.pending_id;$('candidate').textContent=JSON.stringify(data.candidate,null,2);if(wasDictated)$('voice-confirm-hint').hidden=false;$('confirm-form').hidden=false;}}catch(e){show(e.message);}finally{disable(false);}});
 $('confirm-form').addEventListener('submit',async e=>{e.preventDefault();if(busy||!pending)return;disable(true);try{const date=$('measured-at').value;const data=await api('confirmations','POST',{pending_id:pending,confirmed:true,origin:$('origin').value,context:$('context').value,...(date?{measured_at:new Date(date).toISOString()}:{})});recordResponse(data);clearPending();show(data.message);$('text').value='';await refresh();}catch(e){show(e.message);}finally{disable(false);}});
 $('cancel').addEventListener('click',async()=>{if(busy)return;disable(true);try{await api('pending','DELETE');clearPending();show('Entrada descartada. No se guardó.');}catch(e){show(e.message);}finally{disable(false);}});
 for(const b of document.querySelectorAll('[data-example]'))b.addEventListener('click',()=>{$('text').value=b.dataset.example;$('text').focus();});
@@ -48,3 +48,28 @@ async function analyze(){try{
 }catch(e){show(e.message);}}
 $('analyze').addEventListener('click',analyze);
 $('synthetic').addEventListener('click',async()=>{try{await api(`synthetic/${$('analysis-metric').value}`,'POST');await refresh();await analyze();}catch(e){show(e.message);}});
+
+// Dictado por voz con la Web Speech API del navegador. Solo rellena el cuadro de texto
+// editable: nunca envía, confirma ni guarda nada por sí solo. El audio no pasa por este
+// backend; lo procesa el servicio de voz del navegador (puede requerir internet).
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false,dictated=false,voiceBase='',voiceFinal='';
+const VOICE_PRIVACY='El dictado usa el reconocimiento de voz del navegador: el audio puede salir de tu equipo hacia ese servicio y el dictado puede no funcionar sin internet. Revisa siempre la transcripción antes de enviarla; nada se guarda sin tu confirmación.';
+const VOICE_ERRORS={'not-allowed':'Permiso de micrófono denegado. El dictado necesita tu permiso; puedes seguir escribiendo con el teclado.','service-not-allowed':'Permiso de micrófono denegado. El dictado necesita tu permiso; puedes seguir escribiendo con el teclado.','audio-capture':'No se encontró un micrófono disponible. Puedes seguir escribiendo con el teclado.','network':'El servicio de voz del navegador no respondió; suele necesitar internet. Puedes seguir escribiendo con el teclado.','no-speech':'No se detectó voz. Intenta de nuevo o escribe con el teclado.','language-not-supported':'El navegador no acepta el idioma configurado para el dictado. Puedes seguir escribiendo con el teclado.','aborted':''};
+function voiceButton(){const b=$('voice-toggle');b.textContent=listening?'Detener dictado':'Dictar por voz';b.classList.toggle('listening',listening);}
+function voiceSetup(){
+ if(!SR){$('voice-status').textContent='Dictado por voz no disponible en este navegador; escribe con el teclado.';return;}
+ $('voice-toggle').hidden=false;$('voice-hint').hidden=false;$('voice-hint').textContent=VOICE_PRIVACY;
+ $('voice-toggle').addEventListener('click',()=>{
+  if(listening){rec.stop();return;}
+  voiceBase=$('text').value.trim();voiceFinal='';
+  rec=new SR();rec.lang='es-CO';rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i],t=r[0].transcript;if(r.isFinal){voiceFinal=(voiceFinal+' '+t).trim();dictated=true;}else interim+=t;}
+   const spoken=(voiceFinal+' '+interim).trim();$('text').value=[voiceBase,spoken].filter(Boolean).join(' ');};
+  rec.onerror=e=>{const m=VOICE_ERRORS[e.error]||`El dictado se detuvo (${e.error}). Puedes seguir escribiendo con el teclado.`;if(m)$('voice-status').textContent=m;};
+  rec.onend=()=>{listening=false;voiceButton();if($('voice-status').textContent.startsWith('Escuchando'))$('voice-status').textContent='';};
+  listening=true;voiceButton();$('voice-status').textContent='Escuchando… habla con calma; al detener, revisa y corrige el texto antes de enviarlo.';
+  try{rec.start();}catch(err){listening=false;voiceButton();$('voice-status').textContent='No se pudo iniciar el dictado. Puedes seguir escribiendo con el teclado.';}
+ });
+}
+voiceSetup();

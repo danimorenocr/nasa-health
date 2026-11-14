@@ -101,7 +101,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         title="Salud espacial - backend textual de prueba",
         version="0.3.0",
         lifespan=lifespan,
-        description="Solo datos ficticios. No diagnóstico, triage, ML, LLM ni voz. Persistencia SQLite local.",
+        description="Solo datos ficticios. No diagnóstico, triage, ML ni LLM; sin procesamiento de voz en el servidor. Persistencia SQLite local.",
     )
     app.state.engine = engine
     app.state.factory = factory
