@@ -12,6 +12,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 from uuid import uuid4
 
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -22,12 +23,26 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .catalog import INDICATORS, LIMITATIONS, SOURCES
 from .db import Entry, LocalSession, ResearchCache, database, serialize_entry
 from .engine import URGENT_MESSAGE, interpret
+from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_configured
 from .research import ResearchUnavailable, import_study
 from .schemas import ConfirmInput, EntriesOut, HistoryOut, MessageInput, MessageOut, RecordedOut, SessionOut
 from .trends import SYNTHETIC_ORIGIN, analyze_sleep
 from .vitals import SYNTHETIC_VITALS, VITAL_SPECS, analyze_vital, synthetic_payload
 
 ROOT = Path(__file__).resolve().parent.parent
+_env_file = ROOT / ".env"
+if _env_file.is_file():
+    try:
+        for _raw_line in _env_file.read_text(encoding="utf-8").splitlines():
+            _line = _raw_line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                _k, _v = _k.strip(), _v.strip().strip("\"'")
+                if _k and _k not in os.environ:
+                    os.environ[_k] = _v
+    except OSError:
+        pass
+
 # Front React compilado (npm run build en astra-health-front). Se sirve desde el mismo origen que la API.
 FRONT_DIST = Path(os.environ.get("FRONT_DIST", ROOT.parent / "astra-health-front" / "dist"))
 # Retencion: la sesion se conserva mientras haya acceso al menos una vez dentro de este plazo
@@ -219,11 +234,25 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             ),
         }
 
+    def entry_query(session):
+        return select(Entry).where(Entry.session_hash == session.token_hash)
+
     @app.post("/api/v1/messages", response_model=MessageOut)
-    def message(payload: MessageInput, auth: Auth):
+    async def message(payload: MessageInput, auth: Auth):
         db, session = auth
-        result = interpret(payload.text)
-        session.pending = result["candidate"]
+        entries = list(
+            db.scalars(
+                entry_query(session).order_by(Entry.measured_at.desc(), column("rowid").desc())
+            )
+        )
+        result = None
+        if is_llm_configured():
+            result = await interpret_with_llm(payload.text, entries=entries)
+
+        if not result:
+            result = interpret(payload.text, entries=entries)
+
+        session.pending = result.get("candidate")
         session.pending_id = str(uuid4()) if session.pending else None
         session.pending_expires = clock() + PENDING_TTL if session.pending else None
         db.commit()
@@ -251,6 +280,32 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         )
         if count >= 2000:
             raise HTTPException(409, "Sesión llena (2000 registros). Exporta y borra la sesión.")
+        if session.pending.get("kind") == "batch":
+            measurements = session.pending.get("measurements", [])
+            entries_added = []
+            for m in measurements:
+                e = Entry(
+                    id=str(uuid4()),
+                    session_hash=session.token_hash,
+                    recorded_at=iso(clock()),
+                    measured_at=iso(measured),
+                    candidate=m,
+                    origin=payload.origin,
+                    context=payload.context,
+                )
+                db.add(e)
+                entries_added.append(e)
+            session.pending_id, session.pending, session.pending_expires = None, None, None
+            db.commit()
+            serialized = [serialize_entry(e) for e in entries_added]
+            return {
+                "status": "recorded",
+                "entry": serialized[0],
+                "entries": serialized,
+                "clinical_assessment": "not_performed",
+                "message": f"{len(serialized)} registros confirmados en SQLite local. No determina normalidad ni descarta una urgencia.",
+            }
+
         entry = Entry(
             id=str(uuid4()),
             session_hash=session.token_hash,
@@ -263,9 +318,11 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         db.add(entry)
         session.pending_id, session.pending, session.pending_expires = None, None, None
         db.commit()
+        serialized = serialize_entry(entry)
         return {
             "status": "recorded",
-            "entry": serialize_entry(entry),
+            "entry": serialized,
+            "entries": [serialized],
             "clinical_assessment": "not_performed",
             "message": "Registro confirmado en SQLite local. No determina normalidad ni descarta una urgencia.",
         }
@@ -277,8 +334,91 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         db.commit()
         return Response(status_code=204)
 
-    def entry_query(session):
-        return select(Entry).where(Entry.session_hash == session.token_hash)
+    @app.post("/api/v1/transcribe")
+    async def transcribe(request: Request, auth: Auth):
+        audio_bytes = await request.body()
+        if not audio_bytes or len(audio_bytes) < 100:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "El archivo de audio está vacío o es demasiado corto.",
+                    "text": "",
+                    "configured": False,
+                },
+            )
+        if len(audio_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(413, "El archivo de audio supera el límite permitido de 10 MB.")
+
+        openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+
+        if not openai_key and not groq_key:
+            return {
+                "status": "no_credentials",
+                "message": (
+                    "El servidor no tiene configuradas credenciales para la transcripción de notas de voz "
+                    "(OPENAI_API_KEY o GROQ_API_KEY). Puedes usar el dictado en vivo del navegador "
+                    "o escribir directamente con el teclado mientras tanto."
+                ),
+                "text": "",
+                "configured": False,
+            }
+
+        content_type = request.headers.get("content-type", "audio/webm").split(";")[0].strip()
+        ext = "webm"
+        if "ogg" in content_type:
+            ext = "ogg"
+        elif "wav" in content_type:
+            ext = "wav"
+        elif "mp4" in content_type:
+            ext = "mp4"
+        elif "mp3" in content_type or "mpeg" in content_type:
+            ext = "mp3"
+
+        api_url = (
+            "https://api.openai.com/v1/audio/transcriptions"
+            if openai_key
+            else "https://api.groq.com/openai/v1/audio/transcriptions"
+        )
+        api_token = openai_key or groq_key
+        model_name = "whisper-1" if openai_key else "whisper-large-v3-turbo"
+
+        files = {"file": (f"audio.{ext}", audio_bytes, content_type)}
+        data = {"model": model_name, "language": "es"}
+        headers = {"Authorization": f"Bearer {api_token}"}
+
+        try:
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                res = await client.post(api_url, headers=headers, data=data, files=files)
+                if res.status_code == 200:
+                    payload = res.json()
+                    transcribed_text = payload.get("text", "").strip()
+                    return {
+                        "status": "success",
+                        "text": transcribed_text,
+                        "message": "Nota de voz transcrita exitosamente.",
+                        "configured": True,
+                    }
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "status": "error",
+                        "message": f"El servicio externo de transcripción devolvió código {res.status_code}.",
+                        "text": "",
+                        "configured": True,
+                    },
+                )
+        except (httpx.HTTPError, ValueError, OSError) as ex:
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "status": "error",
+                    "message": f"No se pudo contactar el servicio de transcripción: {ex!s}",
+                    "text": "",
+                    "configured": True,
+                },
+            )
 
     @app.get("/api/v1/entries", response_model=EntriesOut)
     def entries(auth: Auth, limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
@@ -333,7 +473,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         }
 
     @app.get("/api/v1/analysis/{metric}")
-    def metric_analysis(
+    async def metric_analysis(
         auth: Auth,
         metric: str,
         days: int = Query(7, ge=1, le=90),
@@ -344,10 +484,20 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         rows = list(db.scalars(entry_query(session).order_by(Entry.measured_at, column("rowid"))))
         now = datetime.fromtimestamp(clock(), timezone.utc)
         if metric == "sleep":
-            return analyze_sleep(rows, now, days, tz_offset_minutes)
-        if metric not in VITAL_SPECS:
+            res = analyze_sleep(rows, now, days, tz_offset_minutes)
+        elif metric in VITAL_SPECS:
+            res = analyze_vital(rows, now, days, tz_offset_minutes, VITAL_SPECS[metric])
+        else:
             raise HTTPException(422, "Indicador de análisis desconocido.")
-        return analyze_vital(rows, now, days, tz_offset_minutes, VITAL_SPECS[metric])
+
+        res["ai_recommendation"] = await generate_analysis_recommendation(
+            metric=metric,
+            personal=res.get("personal_calculation"),
+            education=res.get("education"),
+            recent_entries=rows,
+            now=now,
+        )
+        return res
 
     @app.post("/api/v1/synthetic/{metric}", status_code=201)
     def synthetic_metric(auth: Auth, metric: str):

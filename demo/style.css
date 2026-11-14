@@ -7,3 +7,33 @@ select{font:inherit;padding:9px;border:1px solid #9baeb9;border-radius:6px;margi
 .voice-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
 #voice-toggle.listening{background:#a97614;border-color:#a97614;color:#fff}
 #voice-status{margin:6px 0 0}
+#tts-toggle.active{border-color:#244e64;font-weight:600}
+#tts-speak{margin-top:8px;font-size:13px;padding:6px 12px}
+
+.flow-status-box{margin-top:12px;padding:12px 14px;border-radius:6px;font-size:14px;line-height:1.4}
+.state-grabando{background:#fff0ed;border-left:4px solid #b83226;color:#78221b;font-weight:600}
+.state-transcribiendo{background:#fff8e6;border-left:4px solid #d19423;color:#6b4c10}
+.state-revisar{background:#eef4f8;border-left:4px solid #244e64;color:#183645}
+.state-guardando{background:#f3f0f9;border-left:4px solid #6c4ca3;color:#412c66}
+.state-guardado{background:#ebf7ee;border-left:4px solid #2e7d32;color:#1e4620}
+.state-error{background:#fdf2f2;border-left:4px solid #c53030;color:#742a2a}
+
+.candidate-summary-box{background:#f8fafb;border:1px solid #c9d7df;border-radius:6px;padding:12px;margin:10px 0}
+.candidate-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #e2eaf0}
+.candidate-item:last-child{border-bottom:none}
+.candidate-item .metric-name{font-weight:600;color:#244e64}
+.candidate-item .metric-value{font-size:15px;color:#183645;font-weight:700}
+.candidate-item .metric-raw{font-size:12px;color:#546874;font-style:italic}
+.candidate-raw-details{margin:8px 0 12px;font-size:12px}
+
+.recommendations-box{margin-top:24px;background:#f0f5f9;border:1px solid #244e64;border-radius:8px;padding:18px}
+.recommendations-box h3{color:#183645;margin-top:0}
+#rec-content{margin:12px 0;line-height:1.5;font-size:14px;color:#20333e}
+#rec-content .rec-personal{margin-bottom:10px;font-weight:600;color:#244e64}
+#rec-content .rec-edu{margin-bottom:8px;color:#334d5c}
+#rec-content .rec-cannot{margin-top:8px;font-size:13px;color:#546874}
+.ai-rec-card{background:#ffffff;border:1.5px solid #244e64;border-left:5px solid #1a73e8;border-radius:8px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+.ai-rec-card h4{margin:0 0 8px;font-size:14px;color:#1a73e8;display:flex;align-items:center;gap:6px}
+.ai-rec-card p{margin:0 0 6px;font-size:14px;line-height:1.55;color:#183645;font-weight:500}
+.ai-rec-card p:last-child{margin-bottom:0}
+

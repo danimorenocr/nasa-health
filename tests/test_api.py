@@ -125,3 +125,90 @@ def test_rate_limit(tmp_path):
     with TestClient(create_app(tmp_path / "rate.db")) as c:
         codes = [c.get("/health").status_code for _ in range(121)]
         assert codes[-1] == 429
+
+
+def test_api_memory_flow(client):
+    h = auth(client)
+    # 1. Antes de registrar, consultar memoria
+    r_empty = client.post("/api/v1/messages", headers=h, json={"text": "¿Cuál fue mi último pulso?"})
+    assert r_empty.status_code == 200
+    assert r_empty.json()["status"] == "information"
+    assert r_empty.json()["pending_id"] is None
+    assert "No tienes registros de pulso" in r_empty.json()["message"]
+
+    # 2. Registrar un pulso
+    p = propose(client, h, "Pulso 82 lpm")
+    r_conf = confirm(client, h, p, origin="Pulsómetro de prueba", context="en reposo")
+    assert r_conf.status_code == 201
+
+    # 3. Consultar pulso en memoria
+    r_pulse = client.post("/api/v1/messages", headers=h, json={"text": "¿Cuál fue mi último pulso?"})
+    assert r_pulse.status_code == 200
+    assert r_pulse.json()["status"] == "information"
+    assert r_pulse.json()["pending_id"] is None
+    assert "82 lpm" in r_pulse.json()["message"]
+    assert "Pulsómetro de prueba" in r_pulse.json()["message"]
+
+    # 4. Consultar resumen de registros en memoria
+    r_sum = client.post("/api/v1/messages", headers=h, json={"text": "¿Qué registros tengo?"})
+    assert r_sum.status_code == 200
+    assert "1 registro(s) confirmado(s)" in r_sum.json()["message"]
+    assert "pulso" in r_sum.json()["message"]
+
+
+def test_api_batch_confirmation_flow(client):
+    h = auth(client)
+    # Proponer múltiples mediciones
+    r_msg = client.post(
+        "/api/v1/messages",
+        headers=h,
+        json={"text": "Pulso 80 pulsaiones por minuto y temperatura 36.6 °C"},
+    )
+    assert r_msg.status_code == 200
+    data = r_msg.json()
+    assert data["status"] == "needs_confirmation"
+    assert data["candidate"]["kind"] == "batch"
+    assert len(data["candidate"]["measurements"]) == 2
+    pending_id = data["pending_id"]
+
+    # Confirmar el lote
+    r_conf = client.post(
+        "/api/v1/confirmations",
+        headers=h,
+        json={"pending_id": pending_id, "confirmed": True, "origin": "Pulsómetro y termómetro", "context": "reposo"},
+    )
+    assert r_conf.status_code == 201
+    conf_data = r_conf.json()
+    assert conf_data["status"] == "recorded"
+    assert "2 registros confirmados" in conf_data["message"]
+    assert len(conf_data["entries"]) == 2
+
+    # Verificar que ambas quedaron en SQLite
+    r_entries = client.get("/api/v1/entries", headers=h)
+    assert r_entries.status_code == 200
+    assert r_entries.json()["count"] == 2
+
+
+def test_transcribe_endpoint(client, monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    h = auth(client)
+    # Audio vacío
+    r_empty = client.post("/api/v1/transcribe", headers=h, content=b"")
+    assert r_empty.status_code == 400
+    assert "vacío" in r_empty.json()["message"]
+
+    # Audio real sin credenciales configuradas en el entorno
+    fake_audio = b"RIFF" + b"\x00" * 200
+    r_no_cred = client.post(
+        "/api/v1/transcribe",
+        headers={**h, "Content-Type": "audio/wav"},
+        content=fake_audio,
+    )
+    assert r_no_cred.status_code == 200
+    res_json = r_no_cred.json()
+    assert res_json["status"] == "no_credentials"
+    assert res_json["configured"] is False
+    assert "OPENAI_API_KEY o GROQ_API_KEY" in res_json["message"]
+
+

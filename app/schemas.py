@@ -36,6 +36,8 @@ class MeasurementCandidate(BaseModel):
     values: list[float]
     unit: str
     original_text: str
+    suggested_origin: str | None = None
+    suggested_measured_at: str | None = None
 
 
 class SymptomCandidate(BaseModel):
@@ -43,7 +45,15 @@ class SymptomCandidate(BaseModel):
     original_text: str
 
 
-Candidate = MeasurementCandidate | SymptomCandidate
+class BatchMeasurementCandidate(BaseModel):
+    kind: Literal["batch"]
+    measurements: list[MeasurementCandidate]
+    original_text: str
+    suggested_origin: str | None = None
+    suggested_measured_at: str | None = None
+
+
+Candidate = MeasurementCandidate | SymptomCandidate | BatchMeasurementCandidate
 
 
 class SessionOut(BaseModel):
@@ -65,6 +75,8 @@ class MessageOut(BaseModel):
     pending_id: str | None
     pending_expires_at: str | None
     recorded: Literal[False]
+    recommendations: list[str] | str | None = None
+    llm_used: bool = False
 
 
 class EntryOut(BaseModel):
@@ -81,6 +93,7 @@ class EntryOut(BaseModel):
 class RecordedOut(BaseModel):
     status: Literal["recorded"]
     entry: EntryOut
+    entries: list[EntryOut] | None = None
     clinical_assessment: Literal["not_performed"]
     message: str
 

@@ -2,7 +2,7 @@
 
 Un monolito local: `app/main.py` contiene API, autorización temporal y entrega de tres recursos estáticos permitidos; `schemas.py` valida entradas y tipa las respuestas principales; `engine.py` separa interpretación textual de almacenamiento; `db.py` define modelos SQLAlchemy/SQLite; `catalog.py` contiene indicadores/fuentes; `trends.py` y `vitals.py` hacen los cálculos deterministas de análisis (sueño y signos puntuales, respectivamente); `research.py` consulta metadatos públicos OSDR. `demo/` es HTML/CSS/JS sin build.
 
-Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlchemy (persistencia), Pydantic (validación). Biblioteca estándar para HTTP OSDR, tiempo y tokens. No hay pandas, sklearn, motores de voz o proveedores IA en el servidor: el dictado por voz de la demo ocurre íntegramente en el navegador (Web Speech API) y el backend nunca recibe ni procesa audio. Pytest/httpx/ruff y Playwright son herramientas de pruebas/desarrollo. `requirements.lock` fija el entorno Python probado; `pyproject.toml` describe dependencias directas.
+Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlchemy (persistencia), Pydantic (validación). Biblioteca estándar para HTTP OSDR, tiempo y tokens. No hay pandas, sklearn, motores de voz o proveedores IA en el servidor: el dictado por voz y la respuesta por voz (síntesis TTS) de la demo ocurren íntegramente en el navegador (Web Speech API) y el backend nunca recibe ni procesa audio. Pytest/httpx/ruff y Playwright son herramientas de pruebas/desarrollo. `requirements.lock` fija el entorno Python probado; `pyproject.toml` describe dependencias directas.
 
 ## Datos
 
@@ -28,7 +28,7 @@ La demo no usa recursos externos. `/docs` usa Swagger UI de CDN según FastAPI; 
 
 ## Límites médicos y textuales
 
-Registra pulso, presión de dos componentes, temperatura, saturación, glucosa y sueño. Acepta solo formatos descritos, un indicador por mensaje y números en dígitos. No entiende toda frase en español, números escritos con palabras, varias lecturas ni detalles complejos de fecha/condiciones dentro del mensaje. Puede pedir aclaración aunque una persona entienda el texto. No es un LLM.
+Registra pulso, presión de dos componentes, temperatura, saturación, glucosa y sueño. Acepta formatos numéricos en dígitos y números hablados en español (enteros, decimales con coma/punto y expresiones de presión con «sobre»), además de unidades habladas habituales y variantes (por ejemplo, «pulsaiones por minuto» o «pulsaciones por minuto» normalizadas a lpm, y «grados centígrados» a °C). Admite notas de voz con una o múltiples mediciones separadas por conjunciones («y», «además», comas) generando un lote revisable en un único paso antes de confirmar. No inventa mediciones, unidades, paciente ni fechas; no usa cero para datos ausentes.
 
 No hay umbrales clínicos, tratamiento, dosis, guías de medición de misión ni procedimientos. Una cifra aceptada no está validada médicamente. El sistema no dice que esté sana la persona, ni asigna una causa como aislamiento. Las unidades distintas se mantienen en series separadas: nunca hay conversiones, medias ni cambios calculados entre unidades. Los análisis calculan promedios y cambios solo dentro de la misma unidad y contexto, sin tendencias ni clasificaciones clínicas. `recorded_at` y `measured_at` cumplen funciones distintas; la primera nunca se presenta como fecha real del instrumento.
 
