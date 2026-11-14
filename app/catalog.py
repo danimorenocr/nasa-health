@@ -13,6 +13,13 @@ SOURCES = [
         "reviewed_at": "2026-11-14",
         "scope": "Datos científicos. No conectado a las lecturas personales ni usado como protocolo médico.",
     },
+    {
+        "id": "nasa-sleep-risk",
+        "title": "NASA HRP: riesgo por pérdida de sueño, desincronización circadiana y sobrecarga de trabajo",
+        "url": "https://www.nasa.gov/directorates/esdmd/hhp/risk-of-performance-decrements-and-adverse-health-outcomes-resulting-from-sleep-loss-circadian-desynchronization-and-work-overload/",
+        "reviewed_at": "2026-11-14",
+        "scope": "Explicación general sobre astronautas. No evalúa a una persona ni da horas de referencia.",
+    },
 ]
 LIMITATIONS = [
     "Prototipo local para datos ficticios. No validado para atención clínica ni operaciones de vuelo.",
@@ -20,7 +27,7 @@ LIMITATIONS = [
     "El aviso por palabras de posible urgencia es ilustrativo: puede fallar o alertar ante negaciones.",
     "No hay protocolo clínico de misión ni comunicaciones médicas conectados.",
     "Los límites ambientales de cabina no son umbrales de triage de una persona.",
-    "SQLite local sin cifrado: no introducir salud real. La sesión caduca tras 24 horas sin actividad.",
+    "SQLite local sin cifrado: no introducir salud real. La sesión caduca tras 30 días sin acceso y borra sus registros (configurable).",
 ]
 INDICATORS = [
     {"code": "heart_rate", "name_es": "Pulso", "units": ["lpm"], "example": "Pulso 82 lpm"},
