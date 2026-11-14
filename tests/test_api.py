@@ -105,6 +105,8 @@ def test_pending_and_session_expiry(tmp_path):
         p = propose(c, h)
         assert confirm(c, h, p).status_code == 201
         now[0] += 86400
+        assert c.get("/api/v1/entries", headers=h).status_code == 200  # ya no caduca a las 24 h
+        now[0] += 31 * 86400
         assert c.get("/api/v1/entries", headers=h).status_code == 401
         with c.app.state.factory() as db:
             assert db.scalar(select(func.count()).select_from(Entry)) == 0
