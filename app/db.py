@@ -15,6 +15,7 @@ class Account(Base):
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
     password_salt: Mapped[str] = mapped_column(String(32))
     password_hash: Mapped[str] = mapped_column(String(64))
+    profile_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     created: Mapped[float] = mapped_column(Float)
 
 
@@ -66,6 +67,9 @@ def database(db_path):
         if "revoked" not in columns:
             conn.exec_driver_sql("ALTER TABLE local_session ADD COLUMN revoked BOOLEAN NOT NULL DEFAULT 0")
         conn.exec_driver_sql("UPDATE local_session SET created = updated WHERE created IS NULL")
+        account_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(account)")}
+        if "profile_image_url" not in account_columns:
+            conn.exec_driver_sql("ALTER TABLE account ADD COLUMN profile_image_url VARCHAR(2048)")
     # Best effort on platforms with POSIX permissions. Still not encryption.
     path.chmod(0o600)
     return engine, sessionmaker(bind=engine, expire_on_commit=False)

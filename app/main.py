@@ -32,9 +32,11 @@ from .schemas import (
     LoginInput,
     MessageInput,
     MessageOut,
+    ProfileUpdateInput,
     RecordedOut,
     RegisterInput,
     SessionOut,
+    UserOut,
 )
 from .trends import SYNTHETIC_ORIGIN, analyze_sleep
 from .vitals import SYNTHETIC_VITALS, VITAL_SPECS, analyze_vital, synthetic_payload
@@ -146,7 +148,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         if request.url.path not in {"/docs", "/redoc"}:
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' blob: data:; "
-                "img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+                "img-src 'self' https: data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
             )
         return response
 
@@ -206,7 +208,12 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         return Entry.session_hash.in_(account_sessions)
 
     def user_payload(account):
-        return {"id": account.id, "name": account.name, "email": account.email}
+        return {
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "profile_image_url": account.profile_image_url,
+        }
 
     def create_user_session(db, account):
         token = secrets.token_hex(32)
@@ -309,6 +316,16 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         session.pending_id, session.pending, session.pending_expires = None, None, None
         db.commit()
         return Response(status_code=204)
+
+    @app.patch("/api/v1/profile", response_model=UserOut)
+    def update_profile(payload: ProfileUpdateInput, auth: Auth):
+        db, session = auth
+        account = db.get(Account, session.user_id) if session.user_id else None
+        if account is None:
+            raise HTTPException(401, "La sesión no está vinculada a una cuenta.")
+        account.profile_image_url = payload.profile_image_url
+        db.commit()
+        return user_payload(account)
 
     @app.post("/api/v1/sessions", status_code=201, response_model=SessionOut)
     def new_session():

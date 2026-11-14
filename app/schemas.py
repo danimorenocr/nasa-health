@@ -1,6 +1,7 @@
 import re
 from datetime import datetime, timezone
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -31,10 +32,25 @@ class RegisterInput(LoginInput):
     name: str = Field(min_length=2, max_length=80)
 
 
+class ProfileUpdateInput(StrictModel):
+    profile_image_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("profile_image_url")
+    @classmethod
+    def valid_profile_image_url(cls, value):
+        if value is None or not value.strip():
+            return None
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("La foto debe usar una URL https válida.")
+        return value
+
+
 class UserOut(BaseModel):
     id: str
     name: str
     email: str
+    profile_image_url: str | None = None
 
 
 class AuthOut(BaseModel):

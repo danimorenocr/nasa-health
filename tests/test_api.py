@@ -39,8 +39,19 @@ def test_account_register_login_logout_and_persistent_entries(client):
     registered = client.post("/api/v1/auth/register", json=payload)
     assert registered.status_code == 201
     assert registered.json()["user"]["email"] == "sofi@example.com"
+    assert registered.json()["user"]["profile_image_url"] is None
     first_headers = {"Authorization": "Bearer " + registered.json()["token"]}
     assert client.get("/api/v1/session", headers=first_headers).json()["user"]["name"] == "Sofía Rivera"
+
+    image_url = "https://images.example.com/perfiles/sofi.jpg"
+    assert client.patch(
+        "/api/v1/profile", headers=first_headers, json={"profile_image_url": "http://insegura.example/foto.jpg"}
+    ).status_code == 422
+    updated = client.patch(
+        "/api/v1/profile", headers=first_headers, json={"profile_image_url": image_url}
+    )
+    assert updated.status_code == 200
+    assert updated.json()["profile_image_url"] == image_url
 
     pending = propose(client, first_headers)
     assert confirm(client, first_headers, pending).status_code == 201
@@ -55,6 +66,7 @@ def test_account_register_login_logout_and_persistent_entries(client):
     )
     assert logged_in.status_code == 200
     second_headers = {"Authorization": "Bearer " + logged_in.json()["token"]}
+    assert client.get("/api/v1/session", headers=second_headers).json()["user"]["profile_image_url"] == image_url
     assert client.get("/api/v1/entries", headers=second_headers).json()["count"] == 1
     assert client.post("/api/v1/auth/register", json=payload).status_code == 409
 
