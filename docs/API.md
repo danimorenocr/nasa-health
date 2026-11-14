@@ -14,6 +14,8 @@ Base local: `http://127.0.0.1:8000`. Contrato generado con esquemas de entrada y
 | DELETE | `/api/v1/pending` | Bearer | Descartar candidato |
 | GET | `/api/v1/entries?limit=100&offset=0` | Bearer | Registro paginado, últimos primero |
 | GET | `/api/v1/history?metric=heart_rate&days=30` | Bearer | Serie cronológica por unidad |
+| GET | `/api/v1/analysis/{metric}?days=7&tz_offset_minutes=-300` | Bearer | Cálculos + explicación con fuente, separados |
+| POST | `/api/v1/synthetic/{metric}` | Bearer | Carga 7 días de datos ficticios marcados |
 | GET | `/api/v1/export` | Bearer | Todos los registros, fuentes y límites |
 | DELETE | `/api/v1/session` | Bearer | Eliminar sesión y registros |
 | GET | `/api/v1/safety` | No | Aviso genérico, sin protocolo ni envío |
@@ -22,13 +24,17 @@ Base local: `http://127.0.0.1:8000`. Contrato generado con esquemas de entrada y
 
 `Authorization: Bearer TOKEN`. Crear sesión devuelve `token`, `storage: sqlite`, `expires_after_idle_hours: 720` y `expires_after_idle_days: 30` (configurable con `SESSION_TTL_DAYS`, 1–365). La identidad es la posesión del token; no es login de una persona.
 
-## Análisis de sueño (v0.3)
+## Análisis de indicadores (v0.3)
 
-`GET /api/v1/analysis/sleep?days=7&tz_offset_minutes=-300` (sesión requerida; `days` 1–90). Cálculos por código sobre registros confirmados de sueño en horas; devuelve `personal_calculation`, `education` (fuente `nasa-sleep-risk`, aparte de los cálculos), `cannot_conclude`, `synthetic`, `clinical_assessment: not_performed`.
+`GET /api/v1/analysis/{metric}` acepta `sleep`, `heart_rate`, `blood_pressure`, `oxygen_saturation`, `temperature` y `glucose` (sesión requerida; `days` 1–90). Devuelve `personal_calculation` (cuentas por código), `education` (fuente aparte de los cálculos), `cannot_conclude`, `synthetic` y `clinical_assessment: not_performed`. Otro código da 422.
 
-Reglas: cada registro se asigna a la fecha local de su `measured_at` (captura, no noche verificada); contexto con "siesta" se cuenta aparte; mismo día con valores idénticos es un duplicado (cuenta una vez); valores distintos el mismo día son un conflicto y quedan fuera; valores fuera de 0–24 h se excluyen; las fechas sin registro se listan y no se estiman. Con menos de 3 fechas no se describe un cambio. No hay umbrales de "suficiente" ni "normal".
+Reglas comunes a todos los indicadores: cada registro se asigna a la fecha local de su `measured_at`; las unidades nunca se mezclan ni se convierten (°C y °F, mg/dL y mmol/L son series separadas); mismo día/unidad con valores idénticos es un duplicado (cuenta una vez); valores distintos el mismo día son un conflicto y quedan fuera; lecturas imposibles (validación de datos, no umbrales clínicos: saturación >100 %, pulso >300 lpm, temperatura corporal fuera de 25–45 °C / 77–113 °F, glucosa >1000 mg/dL o >55 mmol/L, presión con sistólica <= diastólica) se excluyen y se listan; las fechas sin registro no se estiman; con menos de 3 fechas no se describe un cambio. En pulso, "en reposo" y "tras ejercicio" se analizan en grupos separados; en glucosa, "en ayunas" y "tras comer"; los contextos no clasificados forman su propio grupo y nunca se comparan entre grupos.
 
-`POST /api/v1/synthetic/sleep` carga 7 noches ficticias (origen `SINTÉTICO - datos de ejemplo`, 7,5 a 4,5 h) y reemplaza las sintéticas anteriores de la sesión. El análisis antepone "Datos sintéticos de ejemplo" cuando incluye alguna.
+`POST /api/v1/synthetic/{metric}` carga 7 días ficticios (origen `SINTÉTICO - datos de ejemplo`) y reemplaza solo las sintéticas de ese indicador en la sesión: no toca registros confirmados ni sintéticos de otros indicadores. El análisis antepone "Datos sintéticos de ejemplo" cuando incluye alguna.
+
+### Sueño
+
+El análisis de sueño conserva su propio formato (`nights`, `coverage`, `missing_dates`, siestas aparte, fechas por captura no verificadas como noche) y su fuente `nasa-sleep-risk`.
 
 Ejemplo de mensaje:
 ```json
