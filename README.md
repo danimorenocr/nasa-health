@@ -1,0 +1,48 @@
+# Salud espacial: backend textual
+
+FastAPI + SQLAlchemy + SQLite, con interfaz mínima de prueba y conector público NASA OSDR. Prototipo local para **datos ficticios**, no para decisiones clínicas. Sin voz, ML, LLM, claves ni cuentas. No se ha desplegado ni subido a un repositorio.
+
+## Arranque (Python 3.10+)
+
+```sh
+python -m venv .venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r requirements.lock
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+Abre http://127.0.0.1:8000/demo. Contrato interactivo en http://127.0.0.1:8000/docs y JSON en `/openapi.json`. La demo no necesita CDN ni Node. El Swagger UI de `/docs` carga JS/CSS de CDN: necesita internet para su interfaz, no para el contrato JSON ni para `/demo`.
+
+Para desarrollo también sirve `pip install -e '.[dev]'`. La instalación inicial necesita internet; después el backend y la demo corren sin red. OSDR usa red solo al pedir estudios no disponibles en caché o al actualizarlos. Se incluyen dos copias de metadatos públicos con fecha/procedencia.
+
+## Prueba rápida
+
+1. Envía `Pulso 82 lpm`. Aún no aparece ningún registro.
+2. Revisa el texto, valor y unidad. Introduce `Pulsómetro ficticio` como origen y confirma.
+3. Recarga la página: el registro sigue. Consulta su historial o descarga el JSON.
+4. Envía `Temperatura 37`: debe pedir unidad. Envía `Me duele el pecho y me falta el aire`: muestra un aviso genérico y aclara que **no ha avisado a nadie**.
+5. Consulta `OSD-656` en OSDR. Verás investigación de proteínas de orina de Inspiration4, no pulso en vivo ni resultados de un modelo.
+
+## Qué entrega
+
+- API `/api/v1`: sesiones aisladas, texto, confirmación, descarte, registros, historial por indicador/unidad, exportación y borrado.
+- SQLite conserva datos y sesiones al reiniciar. La demo conserva el token en `sessionStorage` al recargar esa pestaña. No hay login ni recuperación si se pierde el token. **24 horas de inactividad caducan la sesión y sus registros**, depurados al siguiente acceso de sesión/creación. Pendientes: 2 minutos, consumibles una vez.
+- Fecha de medición separada del registro, con zona horaria y rechazo de fechas futuras. No mezcla unidades ni convierte en silencio.
+- Conector OSDR de solo lectura: estudio, organismo, material, técnicas, descripción, publicaciones y catálogo de archivos con URL/fecha. Caché local y aviso si la fuente no responde. **No descarga mediciones individuales ni entrena nada.**
+
+## Verificar
+
+```sh
+python -m pytest -q
+ruff check app tests scripts
+python -m compileall -q app
+python -m pip check
+```
+
+Pruebas de navegador opcionales (requieren Node; no el backend): `npm ci`, `npx playwright install chromium`, `npm run test:e2e`. En Windows cambia el comando `.venv/bin/python` por `.venv/Scripts/python.exe` en `playwright.config.ts`.
+
+## Límites esenciales
+
+No mide, diagnostica, prescribe ni clasifica cifras como normales/anormales. El aviso por palabras es ilustrativo, puede equivocarse y **no es triage**. No hay protocolo clínico de misión ni comunicación conectados. La validación es de formato, no de plausibilidad médica. SQLite no está cifrado y los tokens no son autenticación de personas. Usa un solo proceso/worker, enlazado a localhost; no abrir a internet. Ver [arquitectura y límites](docs/ARCHITECTURE.md), [API](docs/API.md) y [procedencia OSDR](docs/OSDR.md).
