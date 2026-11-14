@@ -51,12 +51,43 @@ def test_heart_rate_rest_vs_exercise_never_mixed(tmp_path):
         assert a["clinical_assessment"] == "not_performed"
 
 
-def test_blood_pressure_pairs_and_invalid_order(tmp_path):
+def test_context_negation_or_ambiguity_never_lands_in_a_named_group(tmp_path):
+    with make(tmp_path) as c:
+        h = auth(c)
+        log(c, h, "Pulso 95 lpm", 3, context="No estaba en reposo")
+        log(c, h, "Pulso 96 lpm", 2, context="En reposo después de ejercicio")
+        log(c, h, "Pulso 70 lpm", 1, context="No hice ejercicio, en reposo")
+        log(c, h, "Pulso 71 lpm", 0, context="En reposo")
+        p = analysis(c, h, "heart_rate")["personal_calculation"]
+        rest = next(s for s in p["series"] if s["context_group"] == "rest")
+        other = next(s for s in p["series"] if s["context_group"] == "other")
+        # Solo las dos lecturas claramente en reposo; la negada y la ambigua van aparte.
+        assert rest["records"] == 2 and [pt["values"] for pt in rest["points"]] == [[70], [71]]
+        assert other["records"] == 2
+        assert "no describo un cambio" in rest["summary"]
+
+
+def test_same_day_readings_are_normal_and_kept(tmp_path):
+    with make(tmp_path) as c:
+        h = auth(c)
+        log(c, h, "Pulso 72 lpm", 2, context="En reposo")
+        log(c, h, "Pulso 75 lpm", 2, context="En reposo")  # mismo día, valor distinto: normal
+        log(c, h, "Pulso 75 lpm", 2, context="En reposo")  # repetición idéntica: también se conserva
+        log(c, h, "Pulso 78 lpm", 1, context="En reposo")
+        p = analysis(c, h, "heart_rate")["personal_calculation"]
+        rest = next(s for s in p["series"] if s["context_group"] == "rest")
+        assert rest["records"] == 4 and rest["dates"] == 2
+        assert "conflict" not in p and "duplicates_collapsed" not in p
+        assert rest["stats"]["change_last_minus_first"] == [6.0]
+        assert "4 registro(s) en 2 fecha(s)" in rest["summary"]
+
+
+def test_blood_pressure_pairs_and_pair_kept_for_review(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
         for i, (s, d) in enumerate([(118, 76), (120, 78), (121, 79)]):
             log(c, h, f"Presión {s}/{d} mmHg", 4 - i * 2)
-        log(c, h, "Presión 80/120 mmHg", 0)  # sistólica <= diastólica: captura incoherente
+        log(c, h, "Presión 80/120 mmHg", 0)  # pareja no procesable: se conserva, requiere revisión
         a = analysis(c, h, "blood_pressure")
         p = a["personal_calculation"]
         s = p["series"][0]
@@ -64,19 +95,46 @@ def test_blood_pressure_pairs_and_invalid_order(tmp_path):
         assert s["stats"]["mean"] == [119.67, 77.67]
         assert s["stats"]["change_last_minus_first"] == [3.0, 3.0]
         assert "121/79 mmHg" in s["summary"]
-        assert len(p["invalid_excluded"]) == 1
+        assert len(p["not_processed"]) == 1
+        kept = p["not_processed"][0]
+        assert kept["values"] == [80.0, 120.0] and kept["reason"] == "pair_not_processed"
+        assert "no un juicio médico" in p["message"] or "no un criterio médico" in kept["detail"]
+        assert "requiere revisión" in kept["detail"]
         assert a["education"]["source_id"] == "nasa-orthostatic-intolerance"
 
 
-def test_oxygen_saturation_bounds(tmp_path):
+def test_saturation_over_100_is_a_scale_limit_and_kept(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
         for i, v in enumerate([98, 97, 96]):
             log(c, h, f"Saturación {v} %", 4 - i * 2)
-        log(c, h, "Saturación 105 %", 0)  # imposible como porcentaje
-        p = analysis(c, h, "oxygen_saturation")["personal_calculation"]
-        assert p["series"][0]["records"] == 3 and len(p["invalid_excluded"]) == 1
-        assert analysis(c, h, "oxygen_saturation")["education"]["source_id"] == "nasa-hypoxia-risk"
+        log(c, h, "Saturación 105 %", 0)  # supera la escala del porcentaje
+        a = analysis(c, h, "oxygen_saturation")
+        p = a["personal_calculation"]
+        assert p["series"][0]["records"] == 3
+        assert len(p["not_processed"]) == 1
+        kept = p["not_processed"][0]
+        assert kept["values"] == [105.0] and kept["reason"] == "scale"
+        assert "escala del porcentaje" in kept["detail"]
+        assert "se conservan" in p["message"] and "no un juicio médico" in p["message"]
+        assert a["education"]["source_id"] == "nasa-hypoxia-risk"
+
+
+def test_prototype_limits_are_not_called_impossible(tmp_path):
+    with make(tmp_path) as c:
+        h = auth(c)
+        log(c, h, "Pulso 72 lpm", 2, context="En reposo")
+        log(c, h, "Pulso 350 lpm", 1, context="En reposo")  # fuera del límite del prototipo
+        log(c, h, "Temperatura 50 °C", 1)
+        a = analysis(c, h, "heart_rate")
+        kept = a["personal_calculation"]["not_processed"][0]
+        assert kept["reason"] == "prototype_limit"
+        assert "límite del prototipo" in kept["detail"] and "no un criterio médico" in kept["detail"]
+        for forbidden in ("imposible", "inválida", "invalid"):
+            assert forbidden not in kept["detail"].lower()
+            assert forbidden not in a["personal_calculation"]["message"].lower()
+        t = analysis(c, h, "temperature")["personal_calculation"]
+        assert t["series"] == [] and len(t["not_processed"]) == 1
 
 
 def test_temperature_units_stay_separate(tmp_path):
@@ -100,32 +158,17 @@ def test_glucose_units_and_meal_context(tmp_path):
             log(c, h, f"Glucosa {v} mg/dL", 4 - i * 2, context="En ayunas")
         log(c, h, "Glucosa 140 mg/dL", 1, context="Después de comer")
         log(c, h, "Glucosa 5.2 mmol/L", 1, context="En ayunas")
+        log(c, h, "Glucosa 100 mg/dL", 1, context="No estaba en ayunas")  # negada: no es ayunas
         p = analysis(c, h, "glucose")["personal_calculation"]
         fasting = next(
             s for s in p["series"] if s["context_group"] == "fasting" and s["unit"] == "mg/dL"
         )
         post = next(s for s in p["series"] if s["context_group"] == "post_meal")
         mmol = next(s for s in p["series"] if s["unit"] == "mmol/L")
+        other = next(s for s in p["series"] if s["context_group"] == "other")
         assert fasting["records"] == 3 and fasting["stats"]["change_last_minus_first"] == [5.0]
-        assert post["records"] == 1 and mmol["records"] == 1
+        assert post["records"] == 1 and mmol["records"] == 1 and other["records"] == 1
         assert analysis(c, h, "glucose")["education"]["source_id"] == "nasa-spaceflight-insulin-2002"
-
-
-def test_duplicates_conflicts_and_other_metrics(tmp_path):
-    with make(tmp_path) as c:
-        h = auth(c)
-        log(c, h, "Pulso 72 lpm", 3, context="En reposo")
-        log(c, h, "Pulso 72 lpm", 3, context="En reposo")  # duplicado
-        log(c, h, "Pulso 75 lpm", 2, context="En reposo")
-        log(c, h, "Pulso 78 lpm", 2, context="En reposo")  # conflicto
-        log(c, h, "Pulso 400 lpm", 1, context="En reposo")  # imposible
-        log(c, h, "Dormí 7 horas", 1)  # otro indicador
-        p = analysis(c, h, "heart_rate")["personal_calculation"]
-        rest = next(s for s in p["series"] if s["context_group"] == "rest")
-        assert p["duplicates_collapsed"] == 1
-        assert [x["date"] for x in p["conflicting_dates"]] == ["2026-11-12"]
-        assert len(p["invalid_excluded"]) == 1
-        assert rest["records"] == 1 and "no describo un cambio" in rest["summary"]
 
 
 def test_empty_window_and_unknown_metric(tmp_path):
