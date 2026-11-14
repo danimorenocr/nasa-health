@@ -2,7 +2,7 @@
 
 Un monolito local: `app/main.py` contiene API, autorización temporal y entrega de tres recursos estáticos permitidos; `schemas.py` valida entradas y tipa las respuestas principales; `engine.py` separa interpretación textual de almacenamiento; `db.py` define modelos SQLAlchemy/SQLite; `catalog.py` contiene indicadores/fuentes; `trends.py` y `vitals.py` hacen los cálculos deterministas de análisis (sueño y signos puntuales, respectivamente); `research.py` consulta metadatos públicos OSDR. `demo/` es HTML/CSS/JS sin build.
 
-Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlchemy (persistencia), Pydantic (validación). Biblioteca estándar para HTTP OSDR, tiempo y tokens. No hay pandas, sklearn, motores de voz o proveedores IA. Pytest/httpx/ruff y Playwright son herramientas de pruebas/desarrollo. `requirements.lock` fija el entorno Python probado; `pyproject.toml` describe dependencias directas.
+Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlchemy (persistencia), Pydantic (validación). Biblioteca estándar para HTTP OSDR, tiempo y tokens. No hay pandas, sklearn, motores de voz o proveedores IA en el servidor: el dictado por voz de la demo ocurre íntegramente en el navegador (Web Speech API) y el backend nunca recibe ni procesa audio. Pytest/httpx/ruff y Playwright son herramientas de pruebas/desarrollo. `requirements.lock` fija el entorno Python probado; `pyproject.toml` describe dependencias directas.
 
 ## Datos
 
