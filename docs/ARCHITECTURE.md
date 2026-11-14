@@ -1,6 +1,6 @@
 # Arquitectura y límites
 
-Un monolito local: `app/main.py` contiene API, autorización temporal y entrega de tres recursos estáticos permitidos; `schemas.py` valida entradas y tipa las respuestas principales; `engine.py` separa interpretación textual de almacenamiento; `db.py` define modelos SQLAlchemy/SQLite; `catalog.py` contiene indicadores/fuentes; `research.py` consulta metadatos públicos OSDR. `demo/` es HTML/CSS/JS sin build.
+Un monolito local: `app/main.py` contiene API, autorización temporal y entrega de tres recursos estáticos permitidos; `schemas.py` valida entradas y tipa las respuestas principales; `engine.py` separa interpretación textual de almacenamiento; `db.py` define modelos SQLAlchemy/SQLite; `catalog.py` contiene indicadores/fuentes; `trends.py` y `vitals.py` hacen los cálculos deterministas de análisis (sueño y signos puntuales, respectivamente); `research.py` consulta metadatos públicos OSDR. `demo/` es HTML/CSS/JS sin build.
 
 Dependencias de ejecución: FastAPI (rutas/contrato), Uvicorn (servidor), SQLAlchemy (persistencia), Pydantic (validación). Biblioteca estándar para HTTP OSDR, tiempo y tokens. No hay pandas, sklearn, motores de voz o proveedores IA. Pytest/httpx/ruff y Playwright son herramientas de pruebas/desarrollo. `requirements.lock` fija el entorno Python probado; `pyproject.toml` describe dependencias directas.
 
@@ -30,7 +30,7 @@ La demo no usa recursos externos. `/docs` usa Swagger UI de CDN según FastAPI; 
 
 Registra pulso, presión de dos componentes, temperatura, saturación, glucosa y sueño. Acepta solo formatos descritos, un indicador por mensaje y números en dígitos. No entiende toda frase en español, números escritos con palabras, varias lecturas ni detalles complejos de fecha/condiciones dentro del mensaje. Puede pedir aclaración aunque una persona entienda el texto. No es un LLM.
 
-No hay umbrales clínicos, tratamiento, dosis, guías de medición de misión ni procedimientos. Una cifra aceptada no está validada médicamente. El sistema no dice que esté sana la persona, ni asigna una causa como aislamiento. Las unidades distintas se mantienen en series separadas sin conversiones/medias ni tendencias clínicas. `recorded_at` y `measured_at` cumplen funciones distintas; la primera nunca se presenta como fecha real del instrumento.
+No hay umbrales clínicos, tratamiento, dosis, guías de medición de misión ni procedimientos. Una cifra aceptada no está validada médicamente. El sistema no dice que esté sana la persona, ni asigna una causa como aislamiento. Las unidades distintas se mantienen en series separadas: nunca hay conversiones, medias ni cambios calculados entre unidades. Los análisis calculan promedios y cambios solo dentro de la misma unidad y contexto, sin tendencias ni clasificaciones clínicas. `recorded_at` y `measured_at` cumplen funciones distintas; la primera nunca se presenta como fecha real del instrumento.
 
 El aviso de urgencia se dispara por algunas palabras, incluidas negaciones o hipótesis: puede dar falsos positivos y falsos negativos. Su ausencia no descarta urgencia. Prioriza contacto humano y reconoce que no hay protocolo ni comunicación reales, sin afirmar que se haya notificado a nadie. No sustituye un motor de seguridad clínica revisado.
 
