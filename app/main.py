@@ -25,6 +25,7 @@ from .engine import URGENT_MESSAGE, interpret
 from .research import ResearchUnavailable, import_study
 from .schemas import ConfirmInput, EntriesOut, HistoryOut, MessageInput, MessageOut, RecordedOut, SessionOut
 from .trends import SYNTHETIC_ORIGIN, analyze_sleep
+from .vitals import SYNTHETIC_VITALS, VITAL_SPECS, analyze_vital, synthetic_payload
 
 ROOT = Path(__file__).resolve().parent.parent
 # Front React compilado (npm run build en astra-health-front). Se sirve desde el mismo origen que la API.
@@ -70,7 +71,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
 
     app = FastAPI(
         title="Salud espacial - backend textual de prueba",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
         description="Solo datos ficticios. No diagnóstico, triage, ML, LLM ni voz. Persistencia SQLite local.",
     )
@@ -165,7 +166,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
     def health():
         with factory() as db:
             db.execute(select(1)).scalar_one()
-        return {"status": "ok", "version": "0.2.0", "storage": "sqlite", "mode": "prototype"}
+        return {"status": "ok", "version": "0.3.0", "storage": "sqlite", "mode": "prototype"}
 
     @app.get("/api/v1/capabilities")
     def capabilities():
@@ -331,23 +332,57 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             "clinical_assessment": "not_performed",
         }
 
-    @app.get("/api/v1/analysis/sleep")
-    def sleep_analysis(
-        auth: Auth, days: int = Query(7, ge=1, le=90), tz_offset_minutes: int = Query(0, ge=-840, le=840)
+    @app.get("/api/v1/analysis/{metric}")
+    def metric_analysis(
+        auth: Auth,
+        metric: str,
+        days: int = Query(7, ge=1, le=90),
+        tz_offset_minutes: int = Query(0, ge=-840, le=840),
     ):
         db, session = auth
         rows = list(db.scalars(entry_query(session).order_by(Entry.measured_at, Entry.id)))
-        return analyze_sleep(rows, datetime.fromtimestamp(clock(), timezone.utc), days, tz_offset_minutes)
+        now = datetime.fromtimestamp(clock(), timezone.utc)
+        if metric == "sleep":
+            return analyze_sleep(rows, now, days, tz_offset_minutes)
+        if metric not in VITAL_SPECS:
+            raise HTTPException(422, "Indicador de análisis desconocido.")
+        return analyze_vital(rows, now, days, tz_offset_minutes, VITAL_SPECS[metric])
 
-    @app.post("/api/v1/synthetic/sleep", status_code=201)
-    def synthetic_sleep(auth: Auth):
-        """Carga 7 noches ficticias claramente marcadas. Reemplaza las sintéticas anteriores de la sesión."""
+    @app.post("/api/v1/synthetic/{metric}", status_code=201)
+    def synthetic_metric(auth: Auth, metric: str):
+        """Carga una serie ficticia de 7 días, claramente marcada, para probar el análisis.
+
+        Reemplaza solo las sintéticas anteriores de esa sesión e indicador; nunca toca
+        registros confirmados por la persona ni los sintéticos de otros indicadores.
+        """
         db, session = auth
+        if metric == "sleep":
+            payloads = [
+                {
+                    "candidate": {
+                        "kind": "measurement",
+                        "metric": "sleep",
+                        "values": [hours],
+                        "unit": "h",
+                        "original_text": f"Dormí {hours} horas (sintético)",
+                    },
+                    "context": "Historial de prueba, no es de una persona real",
+                }
+                for hours in [7.5, 7.0, 6.5, 6.0, 5.5, 5.0, 4.5]
+            ]
+        elif metric in SYNTHETIC_VITALS:
+            payloads = synthetic_payload(metric)
+        else:
+            raise HTTPException(422, "Indicador sintético desconocido.")
         db.execute(
-            delete(Entry).where(Entry.session_hash == session.token_hash, Entry.origin == SYNTHETIC_ORIGIN)
+            delete(Entry).where(
+                Entry.session_hash == session.token_hash,
+                Entry.origin == SYNTHETIC_ORIGIN,
+                Entry.candidate["metric"].as_string() == metric,
+            )
         )
         now = datetime.fromtimestamp(clock(), timezone.utc)
-        for i, hours in enumerate([7.5, 7.0, 6.5, 6.0, 5.5, 5.0, 4.5]):
+        for i, item in enumerate(payloads):
             when = (now - timedelta(days=6 - i)).replace(hour=12, minute=0, second=0, microsecond=0)
             if when.timestamp() > clock():
                 when = now
@@ -357,19 +392,19 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
                     session_hash=session.token_hash,
                     recorded_at=iso(clock()),
                     measured_at=iso(when.timestamp()),
-                    candidate={
-                        "kind": "measurement",
-                        "metric": "sleep",
-                        "values": [hours],
-                        "unit": "h",
-                        "original_text": f"Dormí {hours} horas (sintético)",
-                    },
+                    candidate=item["candidate"],
                     origin=SYNTHETIC_ORIGIN,
-                    context="Historial de prueba, no es de una persona real",
+                    context=item["context"],
                 )
             )
         db.commit()
-        return {"status": "created", "entries": 7, "origin": SYNTHETIC_ORIGIN, "synthetic": True}
+        return {
+            "status": "created",
+            "metric": metric,
+            "entries": len(payloads),
+            "origin": SYNTHETIC_ORIGIN,
+            "synthetic": True,
+        }
 
     @app.get("/api/v1/export")
     def export(auth: Auth):
