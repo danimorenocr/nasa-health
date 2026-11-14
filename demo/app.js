@@ -39,9 +39,8 @@ async function analyze(){try{
   for(const pt of g.points){const row=document.createElement('div');row.className='bar-row';const d=document.createElement('span');d.textContent=pt.date.slice(5);const b=document.createElement('span');b.className='bar';b.style.width=`${Math.max(3,Math.min(100,pt.values[0]/g.max*100))}%`;const v=document.createElement('span');v.textContent=pt.values.map(x=>String(x).replace('.',',')).join('/')+' '+g.unit;row.append(d,b,v);wrap.append(row);}bars.append(wrap);}
  const bits=[];
  if(metric==='sleep'){bits.push(`Cobertura: ${p.nights_recorded} de ${p.days_in_window} días.`,'Fechas por medición declarada, no verificada como noche.');if(p.naps_excluded.length)bits.push(`${p.naps_excluded.length} siesta(s) aparte.`);}
- else{bits.push(`${p.series.reduce((n,s)=>n+s.records,0)} registro(s) en la ventana.`,'Fechas por medición declarada.');if(p.invalid_excluded.length)bits.push(`${p.invalid_excluded.length} lectura(s) imposibles excluidas.`);}
- if(p.duplicates_collapsed)bits.push(`${p.duplicates_collapsed} duplicado(s) contados una vez.`);
- if(p.conflicting_dates.length)bits.push(`${p.conflicting_dates.length} fecha(s) en conflicto excluidas.`);
+ else{bits.push(`${p.series.reduce((n,s)=>n+s.records,0)} registro(s) en la ventana.`,'Fechas por medición declarada.');if(p.not_processed&&p.not_processed.length){bits.push(`${p.not_processed.length} registro(s) no procesados automáticamente (límite del prototipo o de escala, no un juicio médico), conservados para revisión:`);for(const r of p.not_processed)bits.push(`${r.date}: ${r.values.map(x=>String(x).replace('.',',')).join('/')} ${r.unit} — ${r.detail}.`);}}
+ if(metric==='sleep'){if(p.duplicates_collapsed)bits.push(`${p.duplicates_collapsed} duplicado(s) contados una vez.`);if(p.conflicting_dates.length)bits.push(`${p.conflicting_dates.length} fecha(s) en conflicto excluidas.`);}
  $('analysis-detail').textContent=bits.join(' ');
  $('analysis-edu').textContent=a.education.text;$('analysis-scope').textContent=a.education.scope;
  const src=(await api('capabilities')).sources.find(s=>s.id===a.education.source_id);$('analysis-link').href=src.url;$('analysis-link').textContent=src.title;
