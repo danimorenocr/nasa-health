@@ -279,6 +279,8 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
     group_labels["other"] = "contexto no clasificado"
     group_labels["all"] = None
     for (unit, group) in sorted(per_series):
+        # La consulta ya ordena por instante y desempata por orden de captura (rowid);
+        # esta ordenacion estable solo asegura el orden por instante dentro de la serie.
         readings = sorted(per_series[(unit, group)], key=lambda r: r["t"])
         label = group_labels[group]
         head = spec["name"] if label is None else f"{spec['name']} {label}"
