@@ -15,6 +15,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -25,6 +26,8 @@ from .research import ResearchUnavailable, import_study
 from .schemas import ConfirmInput, EntriesOut, HistoryOut, MessageInput, MessageOut, RecordedOut, SessionOut
 
 ROOT = Path(__file__).resolve().parent.parent
+# Front React compilado (npm run build en astra-health-front). Se sirve desde el mismo origen que la API.
+FRONT_DIST = Path(os.environ.get("FRONT_DIST", ROOT.parent / "astra-health-front" / "dist"))
 TTL = 24 * 60 * 60
 PENDING_TTL = 120
 
@@ -109,8 +112,8 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         )
         if request.url.path not in {"/docs", "/redoc"}:
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-                "img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' blob: data:; "
+                "img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
             )
         return response
 
@@ -391,10 +394,14 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             "validated": False,
         }
 
-    @app.get("/", include_in_schema=False)
     @app.get("/demo", include_in_schema=False)
     def demo():
         return FileResponse(ROOT / "demo/index.html")
+
+    @app.get("/", include_in_schema=False)
+    def front():
+        index = FRONT_DIST / "index.html"
+        return FileResponse(index if index.is_file() else ROOT / "demo/index.html")
 
     @app.get("/app.js", include_in_schema=False)
     def demo_js():
@@ -403,6 +410,9 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
     @app.get("/style.css", include_in_schema=False)
     def demo_css():
         return FileResponse(ROOT / "demo/style.css", media_type="text/css")
+
+    if (FRONT_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=FRONT_DIST / "assets"), name="front-assets")
 
     return app
 
