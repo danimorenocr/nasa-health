@@ -2,17 +2,19 @@
 
 No diagnostican ni definen normalidad. Reglas explicitas, iguales para todos los indicadores:
 
-- Cada registro se asigna a la fecha local de su medicion (measured_at, con tz_offset_minutes).
+- Cada lectura confirmada es una observacion: varias lecturas el mismo dia son normales y
+  NUNCA se descartan ni se etiquetan como conflicto por compartir fecha (no son noches de
+  sueño). Se muestran todas, agrupadas por unidad y contexto comparable.
 - Las unidades nunca se mezclan ni se convierten: cada unidad forma su propia serie.
 - Los contextos no comparables (p. ej. pulso en reposo vs tras ejercicio, glucosa en ayunas vs
-  tras comer) se analizan en grupos separados y nunca se comparan entre si. Un contexto libre
-  que no encaja en un grupo definido queda en "contexto no clasificado".
-- Misma fecha y unidad con valores identicos: duplicado, cuenta una vez. Con valores distintos:
-  conflicto, esa fecha queda fuera de las cuentas del grupo y se lista. Nunca se suman ni se
-  promedian entre si.
-- Valores imposibles como lectura del indicador (rangos de validacion de datos, NO umbrales
-  clinicos) se excluyen y se listan.
-- Las fechas sin registro no se estiman. Con menos de 3 fechas no se describe un cambio.
+  tras comer) se analizan en grupos separados y nunca se comparan entre si. Una palabra clave
+  negada ("no estaba en reposo") o ambigua (mezcla reposo y ejercicio) NO clasifica: cae en
+  "contexto no clasificado", nunca en un grupo seguro por coincidencia de palabra.
+- Los cortes numericos son LIMITES DE PROCESAMIENTO DEL PROTOTIPO, no verdad fisiologica ni
+  umbrales clinicos. Una lectura fuera de ellos NO se descarta: se conserva, se excluye solo
+  de las cuentas automaticas y se lista como "no procesada, requiere revision". Excepcion de
+  escala: una saturacion >100 % supera la propia escala de porcentaje (0-100).
+- Las fechas sin registro no se estiman. Con menos de 3 lecturas no se describe un cambio.
 """
 
 from datetime import timedelta, timezone
@@ -20,7 +22,10 @@ from datetime import timedelta, timezone
 from .engine import normalize
 from .trends import SYNTHETIC_ORIGIN, _h, _parse
 
-MIN_DATES_FOR_CHANGE = 3
+MIN_READINGS_FOR_CHANGE = 3
+
+# Negadores que anulan una palabra clave de contexto cercana (hasta 3 palabras antes).
+NEGATORS = ("no", "sin", "ni", "nunca", "tampoco")
 
 # Grupos de contexto comparables: (clave, etiqueta, palabras clave en el contexto normalizado).
 REST_GROUP = ("rest", "en reposo", ("reposo", "descanso"))
@@ -37,11 +42,12 @@ POST_MEAL_GROUP = (
 )
 OTHER_GROUP = ("other", "contexto no clasificado", ())
 
+# Limites de procesamiento del prototipo por unidad (lo, hi): NO son umbrales medicos.
 VITAL_SPECS = {
     "heart_rate": {
         "code": "heart_rate",
         "name": "Pulso",
-        "units": {"lpm": (0, 300)},  # validacion de lectura imposible, no umbral clinico
+        "units": {"lpm": (0, 300)},
         "value_names": None,
         "groups": [REST_GROUP, EXERCISE_GROUP],
         "education": {
@@ -67,7 +73,7 @@ VITAL_SPECS = {
     "blood_pressure": {
         "code": "blood_pressure",
         "name": "Presión arterial",
-        "units": {"mmHg": (0, 400)},  # validacion de lectura imposible por componente
+        "units": {"mmHg": (0, 400)},
         "value_names": ("sistólica", "diastólica"),
         "groups": [],
         "education": {
@@ -94,7 +100,8 @@ VITAL_SPECS = {
     "oxygen_saturation": {
         "code": "oxygen_saturation",
         "name": "Saturación de oxígeno",
-        "units": {"%": (0, 100)},  # por encima de 100 % es imposible como porcentaje
+        # (0, 100] no es un corte arbitrario: es la escala misma del porcentaje.
+        "units": {"%": (0, 100)},
         "value_names": None,
         "groups": [],
         "education": {
@@ -120,8 +127,6 @@ VITAL_SPECS = {
     "temperature": {
         "code": "temperature",
         "name": "Temperatura corporal",
-        # Intervalos compatibles con una temperatura corporal medida a una persona; fuera de
-        # ellos se asume error de captura. No son umbrales de fiebre ni de salud.
         "units": {"°C": (25, 45), "°F": (77, 113)},
         "value_names": None,
         "groups": [],
@@ -149,7 +154,6 @@ VITAL_SPECS = {
     "glucose": {
         "code": "glucose",
         "name": "Glucosa",
-        # Limites de lectura imposible/absurda por unidad, no umbrales clinicos.
         "units": {"mg/dL": (0, 1000), "mmol/L": (0, 55)},
         "value_names": None,
         "groups": [FASTING_GROUP, POST_MEAL_GROUP],
@@ -175,24 +179,36 @@ VITAL_SPECS = {
 }
 
 
+def _keyword_negated(text, start):
+    """True si un negador aparece en las 3 palabras anteriores a la palabra clave."""
+    before = text[:start].split()
+    return any(w in NEGATORS for w in before[-3:])
+
+
 def _group_of(context, groups):
+    """Grupo comparable del contexto. Palabra negada o mezcla ambigua: no clasifica."""
     text = normalize(context)
+    matched = set()
     for key, _label, keywords in groups:
-        if any(k in text for k in keywords):
-            return key
+        for k in keywords:
+            start = text.find(k)
+            while start != -1:
+                if not _keyword_negated(text, start):
+                    matched.add(key)
+                    break
+                start = text.find(k, start + 1)
+    if len(matched) == 1:
+        return matched.pop()
     return "other"
 
 
 def _fmt_values(values, unit, names):
     parts = [_h(v) for v in values]
-    if names:
-        joined = "/".join(parts)
-    else:
-        joined = parts[0]
+    joined = "/".join(parts) if names else parts[0]
     return f"{joined} {unit}"
 
 
-def _valid(values, bounds):
+def _processable(values, bounds):
     return all(bounds[0] < v <= bounds[1] for v in values)
 
 
@@ -200,16 +216,13 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
     tz = timezone(timedelta(minutes=tz_offset_minutes))
     today = as_of.astimezone(tz).date()
     start = today - timedelta(days=days - 1)
-    per_series = {}  # (unit, group) -> {date: [item]}
-    conflicts, invalid, other_metrics_ignored = [], [], 0
-    duplicates = 0
+    per_series = {}  # (unit, group) -> [reading]
+    not_processed, ignored_incompatible = [], 0
     synthetic = False
     expected_len = 2 if spec["value_names"] else 1
     for e in entries:
         c = e.candidate
-        if c.get("kind") != "measurement":
-            continue
-        if c.get("metric") != spec["code"]:
+        if c.get("kind") != "measurement" or c.get("metric") != spec["code"]:
             continue
         local = _parse(e.measured_at).astimezone(tz)
         if not (start <= local.date() <= today):
@@ -217,21 +230,48 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
         unit = c.get("unit")
         values = c.get("values", [])
         if unit not in spec["units"] or len(values) != expected_len:
-            other_metrics_ignored += 1
+            ignored_incompatible += 1
             continue
         values = [float(v) for v in values]
-        item = {"date": local.date().isoformat(), "values": values, "entry_id": e.id}
-        if not _valid(values, spec["units"][unit]):
-            invalid.append(item)
+        item = {
+            "t": e.measured_at,
+            "date": local.date().isoformat(),
+            "values": values,
+            "unit": unit,
+            "entry_id": e.id,
+        }
+        bounds = spec["units"][unit]
+        if not _processable(values, bounds):
+            if unit == "%" and any(v > 100 for v in values):
+                reason = "scale"
+                detail = "supera la escala del porcentaje (0-100)"
+            else:
+                reason = "prototype_limit"
+                detail = (
+                    f"fuera del intervalo que este prototipo procesa automáticamente "
+                    f"({_h(bounds[0])}-{_h(bounds[1])} {unit}); es un límite del prototipo, "
+                    "no un criterio médico"
+                )
+            not_processed.append({**item, "reason": reason, "detail": detail})
             continue
         if spec["value_names"] and values[0] <= values[1]:
-            # Sistolica debe superar a diastolica; si no, la captura es incoherente.
-            invalid.append(item)
+            # Pareja que el prototipo no procesa automaticamente; puede ser un dato real
+            # capturado en orden distinto o un extremo: se conserva y requiere revision.
+            not_processed.append(
+                {
+                    **item,
+                    "reason": "pair_not_processed",
+                    "detail": (
+                        "la sistólica no supera a la diastólica; el prototipo no procesa "
+                        "la pareja automáticamente y requiere revisión"
+                    ),
+                }
+            )
             continue
         if e.origin == SYNTHETIC_ORIGIN:
             synthetic = True
         group = _group_of(e.context, spec["groups"]) if spec["groups"] else "all"
-        per_series.setdefault((unit, group), {}).setdefault(item["date"], []).append(item)
+        per_series.setdefault((unit, group), []).append(item)
 
     series_out = []
     notes = []
@@ -239,59 +279,31 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
     group_labels["other"] = "contexto no clasificado"
     group_labels["all"] = None
     for (unit, group) in sorted(per_series):
-        by_date = per_series[(unit, group)]
-        points = []
-        for date in sorted(by_date):
-            items = by_date[date]
-            distinct = {tuple(i["values"]) for i in items}
-            if len(distinct) == 1:
-                duplicates += len(items) - 1
-                points.append({"date": date, "values": items[0]["values"]})
-            else:
-                conflicts.append(
-                    {
-                        "date": date,
-                        "unit": unit,
-                        "context_group": group,
-                        "values": sorted(list(v) for v in distinct),
-                    }
-                )
+        readings = sorted(per_series[(unit, group)], key=lambda r: r["t"])
         label = group_labels[group]
         head = spec["name"] if label is None else f"{spec['name']} {label}"
-        if not points:
-            series_out.append(
-                {
-                    "unit": unit,
-                    "context_group": group,
-                    "context_label": label,
-                    "records": 0,
-                    "dates": 0,
-                    "points": [],
-                    "stats": None,
-                    "summary": f"{head}: sin registros válidos en la ventana (solo conflictos o excluidos).",
-                }
-            )
-            continue
-        n = len(points)
-        columns = list(zip(*(p["values"] for p in points)))
+        n = len(readings)
+        dates = len({r["date"] for r in readings})
+        columns = list(zip(*(r["values"] for r in readings)))
         mean = [round(sum(col) / n, 2) for col in columns]
-        first, last = points[0], points[-1]
+        first, last = readings[0], readings[-1]
         change = (
             [round(l - f, 2) for f, l in zip(first["values"], last["values"])]
-            if n >= MIN_DATES_FOR_CHANGE
+            if n >= MIN_READINGS_FOR_CHANGE
             else None
         )
         stats = {
             "mean": mean,
-            "min": min(points, key=lambda p: p["values"][0]),
-            "max": max(points, key=lambda p: p["values"][0]),
+            "min": min(readings, key=lambda r: r["values"][0]),
+            "max": max(readings, key=lambda r: r["values"][0]),
             "first": first,
             "last": last,
             "change_last_minus_first": change,
         }
+        points = [{"t": r["t"], "date": r["date"], "values": r["values"]} for r in readings]
         summary = (
-            f"{head}: registros en {n} de los últimos {days} días (unidad {unit}). "
-            f"Promedio {_fmt_values(mean, unit, spec['value_names'])} "
+            f"{head}: {n} registro(s) en {dates} fecha(s) dentro de los últimos {days} días "
+            f"(unidad {unit}). Promedio {_fmt_values(mean, unit, spec['value_names'])} "
             f"(mínimo {_fmt_values(stats['min']['values'], unit, spec['value_names'])}, "
             f"máximo {_fmt_values(stats['max']['values'], unit, spec['value_names'])})."
         )
@@ -307,14 +319,14 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
                 f"y el último {_fmt_values(last['values'], unit, spec['value_names'])}: {move}."
             )
         else:
-            summary += f" Con menos de {MIN_DATES_FOR_CHANGE} fechas no describo un cambio."
+            summary += f" Con menos de {MIN_READINGS_FOR_CHANGE} registros no describo un cambio."
         series_out.append(
             {
                 "unit": unit,
                 "context_group": group,
                 "context_label": label,
                 "records": n,
-                "dates": n,
+                "dates": dates,
                 "points": points,
                 "stats": stats,
                 "summary": summary,
@@ -323,19 +335,18 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
         notes.append(summary)
 
     if not notes:
-        text = f"No hay registros de {spec['name'].lower()} válidos y confirmados en los últimos {days} días."
+        text = f"No hay registros de {spec['name'].lower()} procesables en los últimos {days} días."
     else:
         text = " ".join(notes)
     extra = []
-    if conflicts:
+    if not_processed:
         extra.append(
-            f"{len(conflicts)} fecha(s) con valores distintos quedaron fuera para no mezclarlos."
+            f"{len(not_processed)} registro(s) no se procesaron automáticamente: se conservan "
+            "y quedan listados para revisión (límite del prototipo o de escala, no un juicio médico)."
         )
-    if invalid:
-        extra.append(f"{len(invalid)} registro(s) imposibles como lectura se excluyeron.")
     if spec["groups"] and any(s["context_group"] == "other" for s in series_out):
         extra.append(
-            "Los registros sin un contexto comparable se cuentan en su propio grupo y no se mezclan."
+            "Los registros sin un contexto comparable claro se cuentan en su propio grupo y no se mezclan."
         )
     if extra:
         text = text + " " + " ".join(extra)
@@ -354,10 +365,8 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
         "personal_calculation": {
             "message": text,
             "series": series_out,
-            "conflicting_dates": conflicts,
-            "duplicates_collapsed": duplicates,
-            "invalid_excluded": invalid,
-            "ignored_incompatible": other_metrics_ignored,
+            "not_processed": not_processed,
+            "ignored_incompatible": ignored_incompatible,
         },
         "education": {**spec["education"], "kind": "general_source_explanation"},
         "cannot_conclude": spec["cannot"],
