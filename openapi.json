@@ -3,7 +3,7 @@
   "info": {
     "title": "Salud espacial - backend textual de prueba",
     "description": "Solo datos ficticios. No diagnóstico, triage, ML, LLM ni voz. Persistencia SQLite local.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/health": {
@@ -424,6 +424,137 @@
                 "schema": {
                   "$ref": "#/components/schemas/HistoryOut"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/{metric}": {
+      "get": {
+        "summary": "Metric Analysis",
+        "operationId": "metric_analysis_api_v1_analysis__metric__get",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Metric"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "tz_offset_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 840,
+              "minimum": -840,
+              "default": 0,
+              "title": "Tz Offset Minutes"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/synthetic/{metric}": {
+      "post": {
+        "summary": "Synthetic Metric",
+        "description": "Carga una serie ficticia de 7 días, claramente marcada, para probar el análisis.\n\nReemplaza solo las sintéticas anteriores de esa sesión e indicador; nunca toca\nregistros confirmados por la persona ni los sintéticos de otros indicadores.",
+        "operationId": "synthetic_metric_api_v1_synthetic__metric__post",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Metric"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -1017,6 +1148,10 @@
             "type": "integer",
             "title": "Expires After Idle Hours"
           },
+          "expires_after_idle_days": {
+            "type": "integer",
+            "title": "Expires After Idle Days"
+          },
           "storage": {
             "type": "string",
             "const": "sqlite",
@@ -1027,6 +1162,7 @@
         "required": [
           "token",
           "expires_after_idle_hours",
+          "expires_after_idle_days",
           "storage"
         ],
         "title": "SessionOut"
