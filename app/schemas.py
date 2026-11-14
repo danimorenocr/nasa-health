@@ -49,6 +49,7 @@ Candidate = MeasurementCandidate | SymptomCandidate
 class SessionOut(BaseModel):
     token: str
     expires_after_idle_hours: int
+    expires_after_idle_days: int
     storage: Literal["sqlite"]
 
 
