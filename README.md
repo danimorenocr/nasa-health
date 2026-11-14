@@ -28,7 +28,7 @@ Para desarrollo también sirve `pip install -e '.[dev]'`. La instalación inicia
 ## Qué entrega
 
 - API `/api/v1`: sesiones aisladas, texto, confirmación, descarte, registros, historial por indicador/unidad, exportación y borrado.
-- SQLite conserva datos y sesiones al reiniciar. La demo conserva el token en `sessionStorage` al recargar esa pestaña. No hay login ni recuperación si se pierde el token. **24 horas de inactividad caducan la sesión y sus registros**, depurados al siguiente acceso de sesión/creación. Pendientes: 2 minutos, consumibles una vez.
+- SQLite conserva datos y sesiones al reiniciar. La demo conserva el token en `sessionStorage` al recargar esa pestaña. No hay login ni recuperación si se pierde el token. **30 días sin acceso (`SESSION_TTL_DAYS`) caducan la sesión y sus registros**; cualquier acceso autenticado renueva el plazo, depurados al siguiente acceso de sesión/creación. Pendientes: 2 minutos, consumibles una vez.
 - Fecha de medición separada del registro, con zona horaria y rechazo de fechas futuras. No mezcla unidades ni convierte en silencio.
 - Conector OSDR de solo lectura: estudio, organismo, material, técnicas, descripción, publicaciones y catálogo de archivos con URL/fecha. Caché local y aviso si la fuente no responde. **No descarga mediciones individuales ni entrena nada.**
 
