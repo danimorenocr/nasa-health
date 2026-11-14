@@ -22,3 +22,21 @@ test('OSDR real public metadata snapshot is separate from health records',async(
 test('untrusted input stays plain text',async({page})=>{
  await page.goto('/');await expect(page.locator('#status')).toContainText('SQLite local');await page.locator('#text').fill('<img src=x onerror=alert()> me siento mareado');await page.locator('#submit').click();await page.locator('#origin').fill('Declarado ficticio');await page.getByRole('button',{name:'Confirmar registro'}).click();await expect(page.locator('#entries')).toContainText('<img');await expect(page.locator('#entries img')).toHaveCount(0);
 });
+test('analysis for every indicator with synthetic data and separated source',async({page})=>{
+ await page.goto('/');await expect(page.locator('#status')).toContainText('SQLite local');
+ for(const metric of ['heart_rate','blood_pressure','oxygen_saturation','temperature','glucose','sleep']){
+  await page.locator('#analysis-metric').selectOption(metric);
+  await page.locator('#synthetic').click();
+  await expect(page.locator('#analysis-out')).toBeVisible();
+  await expect(page.locator('#analysis-personal')).toContainText('Datos sintéticos');
+  await expect(page.locator('#analysis-edu')).not.toBeEmpty();
+  await expect(page.locator('#analysis-cannot li').first()).toBeVisible();
+  expect(await page.locator('#analysis-link').getAttribute('href')).toContain('nasa.gov');
+ }
+ await expect(page.locator('#count')).toHaveText('42');
+ await page.locator('#analysis-metric').selectOption('heart_rate');await page.locator('#analyze').click();
+ await expect(page.locator('#analysis-personal')).toContainText('reposo');
+ await page.setViewportSize({width:1200,height:1000});await page.locator('#analysis-out').screenshot({path:'test-results/screenshots/nasa-analysis-desktop.png'});
+ await page.setViewportSize({width:390,height:844});await page.locator('#analysis-out').screenshot({path:'test-results/screenshots/nasa-analysis-mobile.png'});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
