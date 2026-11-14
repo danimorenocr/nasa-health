@@ -20,7 +20,15 @@ Base local: `http://127.0.0.1:8000`. Contrato generado con esquemas de entrada y
 | GET | `/api/v1/research/studies` | No | Copias locales de estudios públicos |
 | GET | `/api/v1/research/studies/OSD-656` | No | Estudio público: caché o consulta NASA |
 
-`Authorization: Bearer TOKEN`. Crear sesión devuelve `token`, `storage: sqlite`, `expires_after_idle_hours: 24`. La identidad es la posesión del token; no es login de una persona.
+`Authorization: Bearer TOKEN`. Crear sesión devuelve `token`, `storage: sqlite`, `expires_after_idle_hours: 720` y `expires_after_idle_days: 30` (configurable con `SESSION_TTL_DAYS`, 1–365). La identidad es la posesión del token; no es login de una persona.
+
+## Análisis de sueño (v0.3)
+
+`GET /api/v1/analysis/sleep?days=7&tz_offset_minutes=-300` (sesión requerida; `days` 1–90). Cálculos por código sobre registros confirmados de sueño en horas; devuelve `personal_calculation`, `education` (fuente `nasa-sleep-risk`, aparte de los cálculos), `cannot_conclude`, `synthetic`, `clinical_assessment: not_performed`.
+
+Reglas: cada registro se asigna a la fecha local de su `measured_at` (captura, no noche verificada); contexto con "siesta" se cuenta aparte; mismo día con valores idénticos es un duplicado (cuenta una vez); valores distintos el mismo día son un conflicto y quedan fuera; valores fuera de 0–24 h se excluyen; las fechas sin registro se listan y no se estiman. Con menos de 3 fechas no se describe un cambio. No hay umbrales de "suficiente" ni "normal".
+
+`POST /api/v1/synthetic/sleep` carga 7 noches ficticias (origen `SINTÉTICO - datos de ejemplo`, 7,5 a 4,5 h) y reemplaza las sintéticas anteriores de la sesión. El análisis antepone "Datos sintéticos de ejemplo" cuando incluye alguna.
 
 Ejemplo de mensaje:
 ```json
