@@ -1,6 +1,6 @@
 # Salud espacial: backend textual
 
-FastAPI + SQLAlchemy + SQLite, con interfaz mínima de prueba y conector público NASA OSDR. Prototipo local para **datos ficticios**, no para decisiones clínicas. Sin voz, ML, LLM, claves ni cuentas. No se ha desplegado ni subido a un repositorio.
+FastAPI + SQLAlchemy + SQLite, con interfaz mínima de prueba y conector público NASA OSDR. Prototipo local para **datos ficticios**, no para decisiones clínicas. Sin ML, LLM, claves ni cuentas. La demo (`/demo`) ofrece dictado por voz opcional con la Web Speech API del navegador: el audio lo procesa el servicio del navegador (nunca este backend), puede no funcionar sin internet, la transcripción queda editable y nada se guarda sin confirmación. No se ha desplegado ni subido a un repositorio.
 
 ## Arranque (Python 3.10+)
 
