@@ -6,7 +6,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -24,11 +24,15 @@ from .db import Entry, LocalSession, ResearchCache, database, serialize_entry
 from .engine import URGENT_MESSAGE, interpret
 from .research import ResearchUnavailable, import_study
 from .schemas import ConfirmInput, EntriesOut, HistoryOut, MessageInput, MessageOut, RecordedOut, SessionOut
+from .trends import SYNTHETIC_ORIGIN, analyze_sleep
 
 ROOT = Path(__file__).resolve().parent.parent
 # Front React compilado (npm run build en astra-health-front). Se sirve desde el mismo origen que la API.
 FRONT_DIST = Path(os.environ.get("FRONT_DIST", ROOT.parent / "astra-health-front" / "dist"))
-TTL = 24 * 60 * 60
+# Retencion: la sesion se conserva mientras haya acceso al menos una vez dentro de este plazo
+# (SESSION_TTL_DAYS, 30 por defecto). Ya no depende de mantenerla activa cada 24 h.
+TTL_DAYS = max(1, min(int(os.environ.get("SESSION_TTL_DAYS", "30")), 365))
+TTL = TTL_DAYS * 24 * 60 * 60
 PENDING_TTL = 120
 
 
@@ -168,7 +172,8 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         return {
             "input": "text",
             "storage": "sqlite",
-            "session_idle_ttl_hours": 24,
+            "session_idle_ttl_hours": TTL_DAYS * 24,
+            "session_idle_ttl_days": TTL_DAYS,
             "pending_ttl_seconds": PENDING_TTL,
             "sources": SOURCES,
             "limitations": LIMITATIONS,
@@ -193,7 +198,12 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             token = secrets.token_hex(32)
             db.add(LocalSession(token_hash=hashlib.sha256(token.encode()).hexdigest(), updated=clock()))
             db.commit()
-            return {"token": token, "expires_after_idle_hours": 24, "storage": "sqlite"}
+            return {
+                "token": token,
+                "expires_after_idle_hours": TTL_DAYS * 24,
+                "expires_after_idle_days": TTL_DAYS,
+                "storage": "sqlite",
+            }
 
     @app.get("/api/v1/session")
     def current_session(auth: Auth):
@@ -201,7 +211,8 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         return {
             "valid": True,
             "storage": "sqlite",
-            "expires_after_idle_hours": 24,
+            "expires_after_idle_hours": TTL_DAYS * 24,
+            "expires_after_idle_days": TTL_DAYS,
             "entry_count": db.scalar(
                 select(func.count()).select_from(Entry).where(Entry.session_hash == session.token_hash)
             ),
@@ -320,6 +331,46 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             "clinical_assessment": "not_performed",
         }
 
+    @app.get("/api/v1/analysis/sleep")
+    def sleep_analysis(
+        auth: Auth, days: int = Query(7, ge=1, le=90), tz_offset_minutes: int = Query(0, ge=-840, le=840)
+    ):
+        db, session = auth
+        rows = list(db.scalars(entry_query(session).order_by(Entry.measured_at, Entry.id)))
+        return analyze_sleep(rows, datetime.fromtimestamp(clock(), timezone.utc), days, tz_offset_minutes)
+
+    @app.post("/api/v1/synthetic/sleep", status_code=201)
+    def synthetic_sleep(auth: Auth):
+        """Carga 7 noches ficticias claramente marcadas. Reemplaza las sintéticas anteriores de la sesión."""
+        db, session = auth
+        db.execute(
+            delete(Entry).where(Entry.session_hash == session.token_hash, Entry.origin == SYNTHETIC_ORIGIN)
+        )
+        now = datetime.fromtimestamp(clock(), timezone.utc)
+        for i, hours in enumerate([7.5, 7.0, 6.5, 6.0, 5.5, 5.0, 4.5]):
+            when = (now - timedelta(days=6 - i)).replace(hour=12, minute=0, second=0, microsecond=0)
+            if when.timestamp() > clock():
+                when = now
+            db.add(
+                Entry(
+                    id=str(uuid4()),
+                    session_hash=session.token_hash,
+                    recorded_at=iso(clock()),
+                    measured_at=iso(when.timestamp()),
+                    candidate={
+                        "kind": "measurement",
+                        "metric": "sleep",
+                        "values": [hours],
+                        "unit": "h",
+                        "original_text": f"Dormí {hours} horas (sintético)",
+                    },
+                    origin=SYNTHETIC_ORIGIN,
+                    context="Historial de prueba, no es de una persona real",
+                )
+            )
+        db.commit()
+        return {"status": "created", "entries": 7, "origin": SYNTHETIC_ORIGIN, "synthetic": True}
+
     @app.get("/api/v1/export")
     def export(auth: Auth):
         db, session = auth
@@ -346,7 +397,9 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         with factory() as db:
             rows = db.scalars(select(ResearchCache).order_by(ResearchCache.accession))
             return {
-                "studies": [dict(r.document, cached=True, stale=clock() - r.retrieved_at >= 86400) for r in rows],
+                "studies": [
+                    dict(r.document, cached=True, stale=clock() - r.retrieved_at >= 86400) for r in rows
+                ],
                 "scope": "Investigación pública separada de los registros de la sesión.",
                 "suggested_accessions": ["OSD-656", "OSD-48"],
             }
