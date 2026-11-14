@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, func, select
+from sqlalchemy import column, delete, func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .catalog import INDICATORS, LIMITATIONS, SOURCES
@@ -304,7 +304,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         rows = db.scalars(
             entry_query(session)
             .where(Entry.measured_at >= iso(clock() - days * 86400))
-            .order_by(Entry.measured_at, Entry.id)
+            .order_by(Entry.measured_at, column("rowid"))  # rowid: desempata mismo instante por orden de captura
         )
         points = [
             {
@@ -340,7 +340,8 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         tz_offset_minutes: int = Query(0, ge=-840, le=840),
     ):
         db, session = auth
-        rows = list(db.scalars(entry_query(session).order_by(Entry.measured_at, Entry.id)))
+        # rowid desempata registros con el mismo instante por orden de captura
+        rows = list(db.scalars(entry_query(session).order_by(Entry.measured_at, column("rowid"))))
         now = datetime.fromtimestamp(clock(), timezone.utc)
         if metric == "sleep":
             return analyze_sleep(rows, now, days, tz_offset_minutes)
