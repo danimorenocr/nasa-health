@@ -58,15 +58,33 @@
       "post": {
         "summary": "Register",
         "operationId": "register_api_v1_auth_register_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RegisterInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
