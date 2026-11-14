@@ -1,0 +1,75 @@
+{
+  "accession": "OSD-656",
+  "title": "SpaceX Inspiration4 Urine Inflammation Panel (Multiplex, NULISAseq)",
+  "organisms": [
+    "Homo sapiens"
+  ],
+  "materials": [
+    "Urine"
+  ],
+  "assay_types": [
+    "Immunoassay"
+  ],
+  "technologies": [
+    "Multiplex"
+  ],
+  "description": [
+    "The SpaceX Inspiration4 mission was a 3-day mission with four private astronauts to low Earth orbit that occurred in September 2021. The crew collected biospecimen samples before, during, and after flight. One of these biospecimen collections included urine from pre-flight and post-flight/recovery timepoints (L-92, L-44, L-3, R+1, R+45, R+82). 203 inflammatory, cytokine, and chemokine proteins were quantified using NULISAseq. This study derives results from the Multiplex assay, and the urine data in this study are related to other studies using data from the same experiment; OSD-569 (whole blood), OSD-570 (peripheral blood mononuclear cells), OSD-571 (plasma), OSD-572 (skin, oral, and nasal swabs),",
+    "OSD-573 (Dragon capsule samples), OSD-574 (skin biopsy), OSD-575 (serum), and OSD-630 (stool)."
+  ],
+  "mission": {
+    "name": "SpaceX Inspiration4",
+    "start date": "09/16/2021",
+    "end date": "09/18/2021"
+  },
+  "publications": [
+    "The Space Omics and Medical Atlas (SOMA) and international astronaut biobank",
+    "Collection of Biospecimens from the Inspiration4 Mission Establishes the Standards for the Space Omics and Medical Atlas (SOMA)"
+  ],
+  "api_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/",
+  "files_api_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/files/",
+  "files": [
+    {
+      "name": "LSDS-64_Multiplex_urine.immune.AlamarPanel_SUBMITTED.xlsx",
+      "metadata_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/file/LSDS-64_Multiplex_urine.immune.AlamarPanel_SUBMITTED.xlsx/",
+      "download_url": "https://osdr.nasa.gov/geode-py/ws/studies/OSD-656/download?source=datamanager&file=LSDS-64_Multiplex_urine.immune.AlamarPanel_SUBMITTED.xlsx"
+    },
+    {
+      "name": "LSDS-64_Multiplex_200plex v1-Target Information.csv",
+      "metadata_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/file/LSDS-64_Multiplex_200plex%20v1-Target%20Information.csv/",
+      "download_url": "https://osdr.nasa.gov/geode-py/ws/studies/OSD-656/download?source=datamanager&file=LSDS-64_Multiplex_200plex+v1-Target+Information.csv"
+    },
+    {
+      "name": "LSDS-64_Multiplex_urine.immune.AlamarPanel_TRANSFORMED.csv",
+      "metadata_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/file/LSDS-64_Multiplex_urine.immune.AlamarPanel_TRANSFORMED.csv/",
+      "download_url": "https://osdr.nasa.gov/geode-py/ws/studies/OSD-656/download?source=datamanager&file=LSDS-64_Multiplex_urine.immune.AlamarPanel_TRANSFORMED.csv"
+    },
+    {
+      "name": "OSD-656_metadata_OSD-656-ISA.zip",
+      "metadata_url": "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-656/file/OSD-656_metadata_OSD-656-ISA.zip/",
+      "download_url": "https://osdr.nasa.gov/geode-py/ws/studies/OSD-656/download?source=datamanager&file=OSD-656_metadata_OSD-656-ISA.zip"
+    }
+  ],
+  "files_error": null,
+  "file_count_total": 4,
+  "files_truncated": false,
+  "retrieved_at": "2026-11-14T14:34:44.590699+00:00",
+  "data_kind": "public_research_metadata_and_file_manifest",
+  "measurement_data_downloaded": false,
+  "used_for_training": false,
+  "clinical_use": false,
+  "api_docs_url": "https://visualization.osdr.nasa.gov/biodata/api/",
+  "reuse": {
+    "terms_url": "https://science.nasa.gov/reference/osdr-help-terms-and-conditions/",
+    "license_status": "dataset_specific_license_not_verified",
+    "attribution": "Metadata courtesy of NASA Open Science Data Repository and study authors.",
+    "note": "Metadatos públicos consultados. Los términos piden citar el estudio. No se asume CC0 ni una licencia universal para cada archivo; revisar cita, versión y condiciones del dataset antes de reutilizar sus mediciones."
+  },
+  "limitations": [
+    "Investigación, no protocolo de atención ni lectura personal en vivo.",
+    "No se infieren rangos clínicos ni causas a partir de este estudio.",
+    "No se descargaron mediciones individuales ni se entrenó un modelo.",
+    "Organismo humano no demuestra que toda muestra sea de un astronauta; revisar población, material y diseño del estudio.",
+    "Resumen de campos de la fuente, no análisis ni validación científica de sus resultados."
+  ]
+}
