@@ -17,13 +17,25 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import column, delete, func, select
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .catalog import INDICATORS, LIMITATIONS, SOURCES
-from .db import Entry, LocalSession, ResearchCache, database, serialize_entry
+from .db import Account, Entry, LocalSession, ResearchCache, database, serialize_entry
 from .engine import URGENT_MESSAGE, interpret
 from .research import ResearchUnavailable, import_study
-from .schemas import ConfirmInput, EntriesOut, HistoryOut, MessageInput, MessageOut, RecordedOut, SessionOut
+from .schemas import (
+    AuthOut,
+    ConfirmInput,
+    EntriesOut,
+    HistoryOut,
+    LoginInput,
+    MessageInput,
+    MessageOut,
+    RecordedOut,
+    RegisterInput,
+    SessionOut,
+)
 from .trends import SYNTHETIC_ORIGIN, analyze_sleep
 from .vitals import SYNTHETIC_VITALS, VITAL_SPECS, analyze_vital, synthetic_payload
 
@@ -43,6 +55,22 @@ def iso(timestamp):
         .isoformat(timespec="microseconds")
         .replace("+00:00", "Z")
     )
+
+
+def password_digest(password, salt):
+    return hashlib.scrypt(
+        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32, maxmem=64 * 1024 * 1024
+    ).hex()
+
+
+def new_password(password):
+    salt = secrets.token_bytes(16)
+    return salt.hex(), password_digest(password, salt)
+
+
+def password_matches(password, salt_hex, expected):
+    actual = password_digest(password, bytes.fromhex(salt_hex))
+    return secrets.compare_digest(actual, expected)
 
 
 def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
@@ -143,7 +171,16 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         return error(exc.status_code, exc.detail if exc.status_code != 404 else "Ruta no encontrada.")
 
     def cleanup(db):
-        db.execute(delete(LocalSession).where(LocalSession.updated <= clock() - TTL))
+        cutoff = clock() - TTL
+        expired_accounts = db.scalars(
+            select(LocalSession).where(LocalSession.user_id.is_not(None), LocalSession.updated <= cutoff)
+        )
+        for expired in expired_accounts:
+            expired.revoked = True
+            expired.pending_id, expired.pending, expired.pending_expires = None, None, None
+        db.execute(
+            delete(LocalSession).where(LocalSession.user_id.is_(None), LocalSession.updated <= cutoff)
+        )
         db.commit()
 
     def authenticated(authorization: Annotated[str | None, Header()] = None):
@@ -154,13 +191,43 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         with lock, factory() as db:
             cleanup(db)
             session = db.get(LocalSession, digest)
-            if session is None:
+            if session is None or session.revoked:
                 raise HTTPException(401, "Sesión inválida o vencida.")
             session.updated = clock()
             db.commit()
             yield db, session
 
     Auth = Annotated[tuple, Depends(authenticated)]
+
+    def entry_condition(session):
+        if not session.user_id:
+            return Entry.session_hash == session.token_hash
+        account_sessions = select(LocalSession.token_hash).where(LocalSession.user_id == session.user_id)
+        return Entry.session_hash.in_(account_sessions)
+
+    def user_payload(account):
+        return {"id": account.id, "name": account.name, "email": account.email}
+
+    def create_user_session(db, account):
+        token = secrets.token_hex(32)
+        created = clock()
+        db.add(
+            LocalSession(
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                user_id=account.id,
+                revoked=False,
+                created=created,
+                updated=created,
+            )
+        )
+        return {
+            "token": token,
+            "created_at": iso(created),
+            "user": user_payload(account),
+            "expires_after_idle_hours": TTL_DAYS * 24,
+            "expires_after_idle_days": TTL_DAYS,
+            "storage": "sqlite",
+        }
 
     @app.get("/health")
     def health():
@@ -190,6 +257,59 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             "source_ids": ["space-apps-2026"],
         }
 
+    @app.post("/api/v1/auth/register", status_code=201, response_model=AuthOut)
+    def register(payload: RegisterInput, authorization: Annotated[str | None, Header()] = None):
+        with lock, factory() as db:
+            cleanup(db)
+            if db.scalar(select(Account).where(Account.email == payload.email)):
+                raise HTTPException(409, "Ya existe una cuenta con ese correo.")
+            salt, digest = new_password(payload.password)
+            account = Account(
+                id=str(uuid4()),
+                name=payload.name,
+                email=payload.email,
+                password_salt=salt,
+                password_hash=digest,
+                created=clock(),
+            )
+            db.add(account)
+            # If this browser used the earlier anonymous prototype, preserve
+            # those entries by attaching that session to the new account.
+            if authorization and authorization.startswith("Bearer ") and len(authorization) == 71:
+                previous_digest = hashlib.sha256(authorization[7:].encode()).hexdigest()
+                previous = db.get(LocalSession, previous_digest)
+                if previous is not None and previous.user_id is None and not previous.revoked:
+                    previous.user_id = account.id
+                    previous.revoked = True
+            response = create_user_session(db, account)
+            try:
+                db.commit()
+            except IntegrityError as exc:
+                db.rollback()
+                raise HTTPException(409, "Ya existe una cuenta con ese correo.") from exc
+            return response
+
+    @app.post("/api/v1/auth/login", response_model=AuthOut)
+    def login(payload: LoginInput):
+        with lock, factory() as db:
+            cleanup(db)
+            account = db.scalar(select(Account).where(Account.email == payload.email))
+            if account is None or not password_matches(
+                payload.password, account.password_salt, account.password_hash
+            ):
+                raise HTTPException(401, "Correo o contraseña incorrectos.")
+            response = create_user_session(db, account)
+            db.commit()
+            return response
+
+    @app.post("/api/v1/auth/logout", status_code=204)
+    def logout(auth: Auth):
+        db, session = auth
+        session.revoked = True
+        session.pending_id, session.pending, session.pending_expires = None, None, None
+        db.commit()
+        return Response(status_code=204)
+
     @app.post("/api/v1/sessions", status_code=201, response_model=SessionOut)
     def new_session():
         with lock, factory() as db:
@@ -197,10 +317,19 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             if db.scalar(select(func.count()).select_from(LocalSession)) >= 1000:
                 raise HTTPException(503, "Límite de sesiones alcanzado.")
             token = secrets.token_hex(32)
-            db.add(LocalSession(token_hash=hashlib.sha256(token.encode()).hexdigest(), updated=clock()))
+            created = clock()
+            db.add(
+                LocalSession(
+                    token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                    revoked=False,
+                    created=created,
+                    updated=created,
+                )
+            )
             db.commit()
             return {
                 "token": token,
+                "created_at": iso(created),
                 "expires_after_idle_hours": TTL_DAYS * 24,
                 "expires_after_idle_days": TTL_DAYS,
                 "storage": "sqlite",
@@ -209,13 +338,16 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
     @app.get("/api/v1/session")
     def current_session(auth: Auth):
         db, session = auth
+        account = db.get(Account, session.user_id) if session.user_id else None
         return {
             "valid": True,
+            "created_at": iso(session.created or session.updated),
+            "user": user_payload(account) if account else None,
             "storage": "sqlite",
             "expires_after_idle_hours": TTL_DAYS * 24,
             "expires_after_idle_days": TTL_DAYS,
             "entry_count": db.scalar(
-                select(func.count()).select_from(Entry).where(Entry.session_hash == session.token_hash)
+                select(func.count()).select_from(Entry).where(entry_condition(session))
             ),
         }
 
@@ -247,7 +379,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         if measured > clock():
             raise HTTPException(422, "La fecha de medición no puede estar en el futuro.")
         count = db.scalar(
-            select(func.count()).select_from(Entry).where(Entry.session_hash == session.token_hash)
+            select(func.count()).select_from(Entry).where(entry_condition(session))
         )
         if count >= 2000:
             raise HTTPException(409, "Sesión llena (2000 registros). Exporta y borra la sesión.")
@@ -278,13 +410,13 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         return Response(status_code=204)
 
     def entry_query(session):
-        return select(Entry).where(Entry.session_hash == session.token_hash)
+        return select(Entry).where(entry_condition(session))
 
     @app.get("/api/v1/entries", response_model=EntriesOut)
     def entries(auth: Auth, limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
         db, session = auth
         count = db.scalar(
-            select(func.count()).select_from(Entry).where(Entry.session_hash == session.token_hash)
+            select(func.count()).select_from(Entry).where(entry_condition(session))
         )
         rows = db.scalars(
             entry_query(session).order_by(Entry.recorded_at.desc(), Entry.id).limit(limit).offset(offset)
@@ -377,7 +509,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             raise HTTPException(422, "Indicador sintético desconocido.")
         db.execute(
             delete(Entry).where(
-                Entry.session_hash == session.token_hash,
+                entry_condition(session),
                 Entry.origin == SYNTHETIC_ORIGIN,
                 Entry.candidate["metric"].as_string() == metric,
             )

@@ -5,7 +5,7 @@ from conftest import auth, confirm, propose
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.db import Entry, LocalSession
+from app.db import Account, Entry, LocalSession
 from app.main import create_app
 
 
@@ -25,6 +25,55 @@ def test_flow_and_isolation(client):
     assert client.get("/api/v1/entries", headers=a).status_code == 401
     with client.app.state.factory() as db:
         assert db.scalar(select(func.count()).select_from(Entry)) == 0
+
+
+def test_session_exposes_stable_creation_time(client):
+    created = client.post("/api/v1/sessions").json()
+    headers = {"Authorization": "Bearer " + created["token"]}
+    resumed = client.get("/api/v1/session", headers=headers).json()
+    assert created["created_at"] == resumed["created_at"]
+
+
+def test_account_register_login_logout_and_persistent_entries(client):
+    payload = {"name": "Sofía Rivera", "email": "SOFI@example.com", "password": "orbita-segura-26"}
+    registered = client.post("/api/v1/auth/register", json=payload)
+    assert registered.status_code == 201
+    assert registered.json()["user"]["email"] == "sofi@example.com"
+    first_headers = {"Authorization": "Bearer " + registered.json()["token"]}
+    assert client.get("/api/v1/session", headers=first_headers).json()["user"]["name"] == "Sofía Rivera"
+
+    pending = propose(client, first_headers)
+    assert confirm(client, first_headers, pending).status_code == 201
+    assert client.post("/api/v1/auth/logout", headers=first_headers).status_code == 204
+    assert client.get("/api/v1/session", headers=first_headers).status_code == 401
+
+    assert client.post(
+        "/api/v1/auth/login", json={"email": payload["email"], "password": "incorrecta"}
+    ).status_code == 401
+    logged_in = client.post(
+        "/api/v1/auth/login", json={"email": payload["email"], "password": payload["password"]}
+    )
+    assert logged_in.status_code == 200
+    second_headers = {"Authorization": "Bearer " + logged_in.json()["token"]}
+    assert client.get("/api/v1/entries", headers=second_headers).json()["count"] == 1
+    assert client.post("/api/v1/auth/register", json=payload).status_code == 409
+
+    with client.app.state.factory() as db:
+        account = db.scalars(select(Account)).one()
+        assert account.password_hash != payload["password"]
+
+
+def test_register_adopts_entries_from_anonymous_prototype_session(client):
+    anonymous = auth(client)
+    assert confirm(client, anonymous, propose(client, anonymous)).status_code == 201
+    registered = client.post(
+        "/api/v1/auth/register",
+        headers=anonymous,
+        json={"name": "Nueva tripulante", "email": "nueva@example.com", "password": "clave-segura-88"},
+    )
+    assert registered.status_code == 201
+    account_headers = {"Authorization": "Bearer " + registered.json()["token"]}
+    assert client.get("/api/v1/entries", headers=account_headers).json()["count"] == 1
 
 
 def test_pending_invalidated_and_discarded(client):

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -11,6 +12,38 @@ class StrictModel(BaseModel):
 
 class MessageInput(StrictModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class LoginInput(StrictModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value):
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("Correo inválido.")
+        return value
+
+
+class RegisterInput(LoginInput):
+    name: str = Field(min_length=2, max_length=80)
+
+
+class UserOut(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
+class AuthOut(BaseModel):
+    token: str
+    created_at: str
+    user: UserOut
+    expires_after_idle_hours: int
+    expires_after_idle_days: int
+    storage: Literal["sqlite"]
 
 
 class ConfirmInput(StrictModel):
@@ -48,6 +81,7 @@ Candidate = MeasurementCandidate | SymptomCandidate
 
 class SessionOut(BaseModel):
     token: str
+    created_at: str
     expires_after_idle_hours: int
     expires_after_idle_days: int
     storage: Literal["sqlite"]
