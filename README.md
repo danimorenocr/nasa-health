@@ -10,7 +10,7 @@ python -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.lock
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --no-access-log
 ```
 
 Abre http://127.0.0.1:8000/demo. Contrato interactivo en http://127.0.0.1:8000/docs y JSON en `/openapi.json`. La demo no necesita CDN ni Node. El Swagger UI de `/docs` carga JS/CSS de CDN: necesita internet para su interfaz, no para el contrato JSON ni para `/demo`.

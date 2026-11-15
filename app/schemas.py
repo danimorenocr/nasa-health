@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -44,6 +44,45 @@ class ProfileUpdateInput(StrictModel):
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("La foto debe usar una URL https válida.")
         return value
+
+
+class CheckInInput(StrictModel):
+    mood_score: int = Field(ge=1, le=5)
+    mood_word: str = Field(min_length=1, max_length=40)
+    stress: int | None = Field(default=None, ge=1, le=5)
+    isolation: int | None = Field(default=None, ge=1, le=5)
+    concentration: int | None = Field(default=None, ge=1, le=5)
+    energy: int | None = Field(default=None, ge=1, le=5)
+    sleep_difficulty: int | None = Field(default=None, ge=1, le=5)
+
+
+class JournalInput(StrictModel):
+    entry_date: date
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class ReminderInput(StrictModel):
+    kind: Literal["pause", "contact"]
+    title: str = Field(min_length=1, max_length=120)
+    remind_at: datetime
+
+    @field_validator("remind_at")
+    @classmethod
+    def aware_reminder_timestamp(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Incluye zona horaria en remind_at.")
+        return value.astimezone(timezone.utc)
+
+
+class WellnessActionInput(StrictModel):
+    kind: Literal[
+        "onboarding_completed",
+        "breathing_completed",
+        "pause_completed",
+        "explore_body",
+        "explore_insights",
+    ]
+    action_date: date
 
 
 class UserOut(BaseModel):

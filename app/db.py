@@ -1,6 +1,17 @@
 from pathlib import Path
 
-from sqlalchemy import JSON, Boolean, Float, ForeignKey, Index, String, create_engine, event
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    create_engine,
+    event,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -41,6 +52,65 @@ class Entry(Base):
     origin: Mapped[str] = mapped_column(String(120))
     context: Mapped[str] = mapped_column(String(500))
     __table_args__ = (Index("ix_entry_session_measured", "session_hash", "measured_at"),)
+
+
+class DailyCheckIn(Base):
+    __tablename__ = "daily_check_in"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"), index=True)
+    entry_date: Mapped[str] = mapped_column(String(10))
+    mood_score: Mapped[int] = mapped_column(Integer)
+    mood_word: Mapped[str] = mapped_column(String(40))
+    scales: Mapped[dict] = mapped_column(JSON, default=dict)
+    created: Mapped[float] = mapped_column(Float)
+    updated: Mapped[float] = mapped_column(Float)
+    __table_args__ = (UniqueConstraint("owner_id", "entry_date", name="uq_check_in_owner_date"),)
+
+
+class JournalEntry(Base):
+    __tablename__ = "journal_entry"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"), index=True)
+    entry_date: Mapped[str] = mapped_column(String(10))
+    text: Mapped[str] = mapped_column(String(4000))
+    created: Mapped[float] = mapped_column(Float)
+    updated: Mapped[float] = mapped_column(Float)
+
+
+class Reminder(Base):
+    __tablename__ = "reminder"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(120))
+    remind_at: Mapped[str] = mapped_column(String)
+    created: Mapped[float] = mapped_column(Float)
+    updated: Mapped[float] = mapped_column(Float)
+
+
+class WellnessAction(Base):
+    __tablename__ = "wellness_action"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    action_date: Mapped[str] = mapped_column(String(10))
+    created: Mapped[float] = mapped_column(Float)
+    __table_args__ = (
+        UniqueConstraint("owner_id", "kind", "action_date", name="uq_wellness_action_owner_kind_date"),
+    )
+
+
+class RewardGrant(Base):
+    __tablename__ = "reward_grant"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(60))
+    period_key: Mapped[str] = mapped_column(String(20), default="")
+    xp: Mapped[int] = mapped_column(Integer)
+    granted_at: Mapped[float] = mapped_column(Float)
+    __table_args__ = (
+        UniqueConstraint("owner_id", "code", "period_key", name="uq_reward_owner_code_period"),
+    )
 
 
 def database(db_path):

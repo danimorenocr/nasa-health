@@ -6,7 +6,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -22,24 +22,40 @@ from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .catalog import INDICATORS, LIMITATIONS, SOURCES
-from .db import Account, Entry, LocalSession, ResearchCache, database, serialize_entry
+from .db import (
+    Account,
+    DailyCheckIn,
+    Entry,
+    JournalEntry,
+    LocalSession,
+    Reminder,
+    ResearchCache,
+    RewardGrant,
+    WellnessAction,
+    database,
+    serialize_entry,
+)
 from .engine import URGENT_MESSAGE, interpret
 from .guidance import build_guidance
 from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_configured
 from .research import ResearchUnavailable, import_study
 from .schemas import (
     AuthOut,
+    CheckInInput,
     ConfirmInput,
     EntriesOut,
     HistoryOut,
+    JournalInput,
     LoginInput,
     MessageInput,
     MessageOut,
     ProfileUpdateInput,
     RecordedOut,
     RegisterInput,
+    ReminderInput,
     SessionOut,
     UserOut,
+    WellnessActionInput,
 )
 from .trends import SYNTHETIC_ORIGIN, analyze_sleep
 from .vitals import SYNTHETIC_VITALS, VITAL_SPECS, analyze_vital, synthetic_payload
@@ -65,6 +81,17 @@ FRONT_DIST = Path(os.environ.get("FRONT_DIST", ROOT.parent / "astra-health-front
 TTL_DAYS = max(1, min(int(os.environ.get("SESSION_TTL_DAYS", "30")), 365))
 TTL = TTL_DAYS * 24 * 60 * 60
 PENDING_TTL = 120
+
+BADGE_RULES = [
+    ("first_contact", "Primer contacto", 50, 1),
+    ("heart_in_orbit", "Corazón en órbita", 75, 1),
+    ("rest_guardian", "Guardián del descanso", 75, 3),
+    ("stellar_mind", "Mente estelar", 50, 1),
+    ("gravity_strength", "Fuerza gravitacional", 125, 1),
+    ("protective_shield", "Escudo protector", 150, 1),
+    ("orbital_consistency", "Constancia orbital", 100, 5),
+    ("integral_explorer", "Explorador integral", 100, 2),
+]
 
 
 def iso(timestamp):
@@ -232,6 +259,162 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         account_sessions = select(LocalSession.token_hash).where(LocalSession.user_id == session.user_id)
         return Entry.session_hash.in_(account_sessions)
 
+    def require_account(session):
+        if not session.user_id:
+            raise HTTPException(401, "Inicia sesión con una cuenta para usar esta función.")
+        return session.user_id
+
+    def serialize_check_in(row):
+        return {
+            "id": row.id,
+            "date": row.entry_date,
+            "mood_score": row.mood_score,
+            "mood_word": row.mood_word,
+            **row.scales,
+            "created_at": iso(row.created),
+            "updated_at": iso(row.updated),
+        }
+
+    def serialize_journal(row):
+        return {
+            "id": row.id,
+            "date": row.entry_date,
+            "text": row.text,
+            "created_at": iso(row.created),
+            "updated_at": iso(row.updated),
+            "private": True,
+        }
+
+    def serialize_reminder(row):
+        return {
+            "id": row.id,
+            "kind": row.kind,
+            "title": row.title,
+            "remind_at": row.remind_at,
+            "created_at": iso(row.created),
+            "updated_at": iso(row.updated),
+        }
+
+    def grant_once(db, owner_id, code, xp, period_key=""):
+        existing = db.scalar(
+            select(RewardGrant).where(
+                RewardGrant.owner_id == owner_id,
+                RewardGrant.code == code,
+                RewardGrant.period_key == period_key,
+            )
+        )
+        if existing:
+            return existing
+        grant = RewardGrant(
+            id=str(uuid4()),
+            owner_id=owner_id,
+            code=code,
+            period_key=period_key,
+            xp=xp,
+            granted_at=clock(),
+        )
+        db.add(grant)
+        db.flush()
+        return grant
+
+    def reward_progress(db, session):
+        owner_id = require_account(session)
+        today = datetime.fromtimestamp(clock(), timezone.utc).date()
+        week_start = today - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6)
+        week_key = f"{week_start.isocalendar().year}-W{week_start.isocalendar().week:02d}"
+
+        check_ins = list(
+            db.scalars(select(DailyCheckIn).where(DailyCheckIn.owner_id == owner_id))
+        )
+        reminders = list(db.scalars(select(Reminder).where(Reminder.owner_id == owner_id)))
+        actions = list(db.scalars(select(WellnessAction).where(WellnessAction.owner_id == owner_id)))
+        action_kinds = {action.kind for action in actions}
+        weekly_actions = {
+            action.kind
+            for action in actions
+            if week_start.isoformat() <= action.action_date <= week_end.isoformat()
+        }
+        weekly_check_in = any(
+            week_start.isoformat() <= item.entry_date <= week_end.isoformat() for item in check_ins
+        )
+        weekly_pause = "pause_completed" in weekly_actions
+        if weekly_check_in and weekly_pause:
+            grant_once(db, owner_id, "operation_wellbeing", 150, week_key)
+
+        sleep_dates = {
+            row.measured_at[:10]
+            for row in db.scalars(entry_query(session))
+            if row.candidate.get("kind") == "measurement" and row.candidate.get("metric") == "sleep"
+        }
+        completed_missions = db.scalar(
+            select(func.count()).select_from(RewardGrant).where(
+                RewardGrant.owner_id == owner_id,
+                RewardGrant.code == "operation_wellbeing",
+            )
+        ) or 0
+        progress_by_code = {
+            "first_contact": int("onboarding_completed" in action_kinds),
+            "heart_in_orbit": len(check_ins),
+            "rest_guardian": len(sleep_dates),
+            "stellar_mind": int("breathing_completed" in action_kinds),
+            "gravity_strength": completed_missions,
+            "protective_shield": len(reminders),
+            "orbital_consistency": len({item.entry_date for item in check_ins}),
+            "integral_explorer": sum(
+                action in action_kinds for action in ("explore_body", "explore_insights")
+            ),
+        }
+        badge_rows = []
+        for code, name, xp, target in BADGE_RULES:
+            progress = min(progress_by_code[code], target)
+            if progress >= target:
+                grant_once(db, owner_id, code, xp)
+            unlocked = db.scalar(
+                select(RewardGrant.id).where(
+                    RewardGrant.owner_id == owner_id,
+                    RewardGrant.code == code,
+                    RewardGrant.period_key == "",
+                )
+            ) is not None
+            badge_rows.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "xp": xp,
+                    "progress": progress,
+                    "target": target,
+                    "unlocked": unlocked,
+                }
+            )
+        db.commit()
+        total_xp = db.scalar(
+            select(func.coalesce(func.sum(RewardGrant.xp), 0)).where(RewardGrant.owner_id == owner_id)
+        )
+        mission_granted = db.scalar(
+            select(RewardGrant.id).where(
+                RewardGrant.owner_id == owner_id,
+                RewardGrant.code == "operation_wellbeing",
+                RewardGrant.period_key == week_key,
+            )
+        ) is not None
+        return {
+            "xp": total_xp,
+            "badges": badge_rows,
+            "weekly_mission": {
+                "code": "operation_wellbeing",
+                "name": "Operación Bienestar",
+                "week": week_key,
+                "xp": 150,
+                "conditions": [
+                    {"code": "check_in", "label": "Completar un check-in", "complete": weekly_check_in},
+                    {"code": "pause", "label": "Completar una pausa voluntaria", "complete": weekly_pause},
+                ],
+                "complete": weekly_check_in and weekly_pause,
+                "xp_awarded": mission_granted,
+            },
+        }
+
     def user_payload(account):
         return {
             "id": account.id,
@@ -355,6 +538,220 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         account.profile_image_url = payload.profile_image_url
         db.commit()
         return user_payload(account)
+
+    @app.get("/api/v1/mind/check-ins")
+    def list_check_ins(auth: Auth, days: int = Query(7, ge=1, le=3650)):
+        db, session = auth
+        owner_id = require_account(session)
+        today = datetime.fromtimestamp(clock(), timezone.utc).date()
+        start = today - timedelta(days=days - 1)
+        rows = db.scalars(
+            select(DailyCheckIn)
+            .where(DailyCheckIn.owner_id == owner_id, DailyCheckIn.entry_date >= start.isoformat())
+            .order_by(DailyCheckIn.entry_date)
+        )
+        return {"check_ins": [serialize_check_in(row) for row in rows], "days": days}
+
+    @app.put("/api/v1/mind/check-ins/{entry_date}")
+    def save_check_in(entry_date: date, payload: CheckInInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        today = datetime.fromtimestamp(clock(), timezone.utc).date()
+        if entry_date > today:
+            raise HTTPException(422, "El check-in no puede tener una fecha futura.")
+        row = db.scalar(
+            select(DailyCheckIn).where(
+                DailyCheckIn.owner_id == owner_id,
+                DailyCheckIn.entry_date == entry_date.isoformat(),
+            )
+        )
+        now = clock()
+        scales = {
+            key: value
+            for key, value in {
+                "stress": payload.stress,
+                "isolation": payload.isolation,
+                "concentration": payload.concentration,
+                "energy": payload.energy,
+                "sleep_difficulty": payload.sleep_difficulty,
+            }.items()
+            if value is not None
+        }
+        created = row is None
+        if row is None:
+            row = DailyCheckIn(
+                id=str(uuid4()),
+                owner_id=owner_id,
+                entry_date=entry_date.isoformat(),
+                mood_score=payload.mood_score,
+                mood_word=payload.mood_word,
+                scales=scales,
+                created=now,
+                updated=now,
+            )
+            db.add(row)
+        else:
+            row.mood_score = payload.mood_score
+            row.mood_word = payload.mood_word
+            row.scales = scales
+            row.updated = now
+        db.commit()
+        return {"status": "created" if created else "updated", "check_in": serialize_check_in(row)}
+
+    @app.get("/api/v1/mind/journal")
+    def list_journal(auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        rows = db.scalars(
+            select(JournalEntry)
+            .where(JournalEntry.owner_id == owner_id)
+            .order_by(JournalEntry.entry_date.desc(), JournalEntry.created.desc())
+        )
+        return {"entries": [serialize_journal(row) for row in rows]}
+
+    @app.post("/api/v1/mind/journal", status_code=201)
+    def create_journal(payload: JournalInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        if payload.entry_date > datetime.fromtimestamp(clock(), timezone.utc).date():
+            raise HTTPException(422, "La entrada no puede tener una fecha futura.")
+        now = clock()
+        row = JournalEntry(
+            id=str(uuid4()),
+            owner_id=owner_id,
+            entry_date=payload.entry_date.isoformat(),
+            text=payload.text,
+            created=now,
+            updated=now,
+        )
+        db.add(row)
+        db.commit()
+        return serialize_journal(row)
+
+    @app.put("/api/v1/mind/journal/{entry_id}")
+    def update_journal(entry_id: str, payload: JournalInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        row = db.scalar(
+            select(JournalEntry).where(
+                JournalEntry.id == entry_id,
+                JournalEntry.owner_id == owner_id,
+            )
+        )
+        if row is None:
+            raise HTTPException(404, "Entrada de diario no encontrada.")
+        if payload.entry_date > datetime.fromtimestamp(clock(), timezone.utc).date():
+            raise HTTPException(422, "La entrada no puede tener una fecha futura.")
+        row.entry_date = payload.entry_date.isoformat()
+        row.text = payload.text
+        row.updated = clock()
+        db.commit()
+        return serialize_journal(row)
+
+    @app.delete("/api/v1/mind/journal/{entry_id}", status_code=204)
+    def delete_journal(entry_id: str, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        row = db.scalar(
+            select(JournalEntry).where(
+                JournalEntry.id == entry_id,
+                JournalEntry.owner_id == owner_id,
+            )
+        )
+        if row is None:
+            raise HTTPException(404, "Entrada de diario no encontrada.")
+        db.delete(row)
+        db.commit()
+        return Response(status_code=204)
+
+    @app.get("/api/v1/mind/reminders")
+    def list_reminders(auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        rows = db.scalars(
+            select(Reminder).where(Reminder.owner_id == owner_id).order_by(Reminder.remind_at)
+        )
+        return {"reminders": [serialize_reminder(row) for row in rows]}
+
+    @app.post("/api/v1/mind/reminders", status_code=201)
+    def create_reminder(payload: ReminderInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        now = clock()
+        row = Reminder(
+            id=str(uuid4()),
+            owner_id=owner_id,
+            kind=payload.kind,
+            title=payload.title,
+            remind_at=payload.remind_at.isoformat().replace("+00:00", "Z"),
+            created=now,
+            updated=now,
+        )
+        db.add(row)
+        db.commit()
+        return serialize_reminder(row)
+
+    @app.put("/api/v1/mind/reminders/{reminder_id}")
+    def update_reminder(reminder_id: str, payload: ReminderInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        row = db.scalar(
+            select(Reminder).where(Reminder.id == reminder_id, Reminder.owner_id == owner_id)
+        )
+        if row is None:
+            raise HTTPException(404, "Recordatorio no encontrado.")
+        row.kind = payload.kind
+        row.title = payload.title
+        row.remind_at = payload.remind_at.isoformat().replace("+00:00", "Z")
+        row.updated = clock()
+        db.commit()
+        return serialize_reminder(row)
+
+    @app.delete("/api/v1/mind/reminders/{reminder_id}", status_code=204)
+    def delete_reminder(reminder_id: str, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        row = db.scalar(
+            select(Reminder).where(Reminder.id == reminder_id, Reminder.owner_id == owner_id)
+        )
+        if row is None:
+            raise HTTPException(404, "Recordatorio no encontrado.")
+        db.delete(row)
+        db.commit()
+        return Response(status_code=204)
+
+    @app.post("/api/v1/mind/actions")
+    def record_wellness_action(payload: WellnessActionInput, auth: Auth):
+        db, session = auth
+        owner_id = require_account(session)
+        today = datetime.fromtimestamp(clock(), timezone.utc).date()
+        if payload.action_date > today:
+            raise HTTPException(422, "La acción no puede tener una fecha futura.")
+        row = db.scalar(
+            select(WellnessAction).where(
+                WellnessAction.owner_id == owner_id,
+                WellnessAction.kind == payload.kind,
+                WellnessAction.action_date == payload.action_date.isoformat(),
+            )
+        )
+        created = row is None
+        if row is None:
+            row = WellnessAction(
+                id=str(uuid4()),
+                owner_id=owner_id,
+                kind=payload.kind,
+                action_date=payload.action_date.isoformat(),
+                created=clock(),
+            )
+            db.add(row)
+            db.flush()
+        rewards = reward_progress(db, session)
+        return {"status": "created" if created else "already_recorded", "rewards": rewards}
+
+    @app.get("/api/v1/rewards")
+    def rewards(auth: Auth):
+        db, session = auth
+        return reward_progress(db, session)
 
     @app.post("/api/v1/sessions", status_code=201, response_model=SessionOut)
     def new_session():
