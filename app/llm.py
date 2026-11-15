@@ -158,6 +158,7 @@ async def interpret_with_llm(
     text: str,
     entries: list[Any] | None = None,
     now: datetime | None = None,
+    lang: str = "es",
 ) -> dict[str, Any] | None:
     config = get_llm_config()
     if not config:
@@ -217,6 +218,7 @@ async def interpret_with_llm(
         f"- Contexto Glucosa: {NASA_EVIDENCE_CONTEXT['glucose']}\n"
         f"- Contexto Sueño: {NASA_EVIDENCE_CONTEXT['sleep']}\n"
         "Combina la cifra actual y la situación del astronauta (si tiene fiebre/alta temperatura, fatiga, esfuerzo) con consejos prácticos de cabina (hidratación, ventilador, pausas activas, ropa térmica, re-medición).\n\n"
+        f"{_language_rule(lang)}\n\n"
         "RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO con este formato exacto:\n"
         "{\n"
         '  "status": "needs_confirmation",\n'
@@ -294,6 +296,43 @@ async def interpret_with_llm(
     return None
 
 
+def _language_rule(lang: str) -> str:
+    if lang == "en":
+        return (
+            "LANGUAGE RULE: the interface is in ENGLISH. Write the 'message' and 'recommendations' "
+            "fields (and any other free text you generate) entirely in English. Keep JSON keys, "
+            "metric identifiers and units exactly as specified."
+        )
+    return "IDIOMA: la interfaz está en ESPAÑOL. Escribe 'message' y 'recommendations' en español."
+
+
+METRIC_DISPLAY_NAMES_EN = {
+    "temperature": "body temperature",
+    "heart_rate": "heart rate",
+    "blood_pressure": "blood pressure",
+    "oxygen_saturation": "oxygen saturation",
+    "glucose": "glucose",
+    "sleep": "sleep hours",
+    "muscle_mass": "muscle weight",
+}
+
+_NO_RECORDS_EN = (
+    "There is nothing to analyze yet: you have no confirmed {label} records in this session (last 7 days). "
+    "Please record at least one measurement to generate the NASA-evidence-assisted analysis."
+)
+
+_FALLBACK_EN = {
+    "temperature": "Core temperature can rise faster in microgravity, especially during exercise. Keep cabin ventilation on, drink water regularly and repeat the measurement if it feels high.",
+    "heart_rate": "Fluid shifts and cardiovascular deconditioning are documented by NASA in spaceflight. Keep your resistive and aerobic training, stay hydrated and rest if your pulse stays high.",
+    "blood_pressure": "NASA studies orthostatic intolerance after microgravity. Change posture slowly, keep fluids and sodium adequate and use compression garments during operational transitions.",
+    "oxygen_saturation": "NASA monitors oxygenation because of reduced cabin pressure and spacesuits. If you see low readings, check the sensor and the suit or module seal, then measure again.",
+    "glucose": "NASA research suggests subclinical changes in insulin sensitivity in spaceflight. Keep regular meal times, favor low-glycemic carbohydrates and stay active.",
+    "sleep": "Sleep loss and circadian disruption are key spaceflight risks. Limit blue light before bed, use an eye mask and earplugs, and keep a steady sleep routine.",
+    "muscle_mass": "Muscle mass needs constant stimulus in microgravity. Keep resistance exercise and enough protein, and compare your weekly trend.",
+    "default": "Keep monitoring your vital signs regularly and follow the mission life-support guidelines if you notice any unusual change.",
+}
+
+
 METRIC_DISPLAY_NAMES = {
     "temperature": "temperatura corporal",
     "heart_rate": "pulso y frecuencia cardíaca",
@@ -326,8 +365,13 @@ def generate_deterministic_analysis_recommendation(
     metric: str,
     personal: dict[str, Any] | None,
     education: dict[str, Any] | None,
+    lang: str = "es",
 ) -> str:
     """Genera recomendaciones inteligentes y contextuales cuando el LLM está fuera de línea."""
+    if lang == "en":
+        if not has_metric_records(metric, personal):
+            return _NO_RECORDS_EN.format(label=METRIC_DISPLAY_NAMES_EN.get(metric, metric))
+        return _FALLBACK_EN.get(metric, _FALLBACK_EN["default"])
     label = METRIC_DISPLAY_NAMES.get(metric, metric)
     if not has_metric_records(metric, personal):
         return (
@@ -412,14 +456,17 @@ async def generate_analysis_recommendation(
     education: dict[str, Any] | None,
     recent_entries: list[Any] | None = None,
     now: datetime | None = None,
+    lang: str = "es",
 ) -> str:
     """Genera una recomendación rica, empática y contextual sintetizando el historial del usuario y la evidencia NASA."""
     config = get_llm_config()
     if not config:
-        return generate_deterministic_analysis_recommendation(metric, personal, education)
+        return generate_deterministic_analysis_recommendation(metric, personal, education, lang)
 
     if not has_metric_records(metric, personal):
         label = METRIC_DISPLAY_NAMES.get(metric, metric)
+        if lang == "en":
+            return _NO_RECORDS_EN.format(label=METRIC_DISPLAY_NAMES_EN.get(metric, metric))
         return (
             f"Todavía no se puede analizar: no tienes registros confirmados de {label} en esta sesión (últimos 7 días). "
             "Por favor, registra al menos una medición para generar el análisis asistido con evidencia de la NASA."
@@ -446,6 +493,7 @@ async def generate_analysis_recommendation(
         "- NO repitas fríamente los números o fórmulas matemáticas ('con menos de 3 registros...').\n"
         "- NO digas siempre lo mismo: sé perspicaz, empático y profesional.\n"
         "- Extensión: 2 o 3 oraciones concisas y directas en español.\n"
+        f"- {_language_rule(lang)}\n"
     )
 
     headers = {
@@ -472,4 +520,4 @@ async def generate_analysis_recommendation(
     except (httpx.HTTPError, ValueError, OSError, json.JSONDecodeError, KeyError) as ex:
         logger.warning("Fallo al generar recomendación de análisis con LLM: %s", ex)
 
-    return generate_deterministic_analysis_recommendation(metric, personal, education)
+    return generate_deterministic_analysis_recommendation(metric, personal, education, lang)

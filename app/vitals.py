@@ -404,6 +404,12 @@ SYNTHETIC_VITALS = {
         "context": "Historial de prueba, no es de una persona real",
         "text": "Temperatura {v} °C (sintético)",
     },
+    "muscle_mass": {
+        "values": [[32.1], [32.2], [32.1], [32.3], [32.4], [32.3], [32.5]],
+        "unit": "kg",
+        "context": "Báscula de composición corporal. Historial de prueba, no es de una persona real",
+        "text": "Músculos {v} kg (sintético)",
+    },
     "glucose": {
         "values": [[90], [92], [88], [95], [91], [97], [99]],
         "unit": "mg/dL",

@@ -181,7 +181,7 @@ def test_messages_endpoint_accepts_llm_multi_candidates(client, monkeypatch):
     from app import main
     from tests.conftest import auth
 
-    async def fake_llm(text, entries=None):
+    async def fake_llm(text, entries=None, lang="es"):
         from app.llm import _normalize_candidates
 
         parsed = deepcopy(MULTI_LLM_RESULT)

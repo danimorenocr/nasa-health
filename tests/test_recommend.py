@@ -50,3 +50,37 @@ def test_muscle_weight_in_kg_is_understood(client):
     assert body["candidate"]["metric"] == "muscle_mass"
     assert body["candidate"]["values"] == [32.5] and body["candidate"]["unit"] == "kg"
     assert client.post("/api/v1/messages", headers=headers, json={"text": "Músculos 32"}).json()["status"] == "needs_clarification"
+
+
+def test_llm_receives_the_page_language(client, monkeypatch):
+    from app import main
+
+    seen = {}
+
+    async def fake_llm(text, entries=None, lang="es"):
+        seen["lang"] = lang
+        return None
+
+    monkeypatch.setattr(main, "is_llm_configured", lambda: True)
+    monkeypatch.setattr(main, "interpret_with_llm", fake_llm)
+    headers = auth(client)
+    client.post("/api/v1/messages", headers=headers, json={"text": "Pulso 82 lpm", "lang": "en"})
+    assert seen["lang"] == "en"
+    client.post("/api/v1/messages", headers=headers, json={"text": "Pulso 82 lpm"})
+    assert seen["lang"] == "es"
+
+
+def test_prompt_and_saved_recommendation_follow_language():
+    from app.llm import _language_rule, generate_deterministic_analysis_recommendation
+
+    assert "ENGLISH" in _language_rule("en") and "ESPAÑOL" in _language_rule("es")
+    assert assess(m("heart_rate", [120], "lpm"))["text_en"].startswith("Your pulse")
+    text = generate_deterministic_analysis_recommendation("sleep", {"message": "x", "nights_recorded": 3}, None, "en")
+    assert "sleep" in text.lower() and "Tu " not in text
+    assert client_synthetic_has_muscle()
+
+
+def client_synthetic_has_muscle():
+    from app.vitals import SYNTHETIC_VITALS, synthetic_payload
+
+    return len(synthetic_payload("muscle_mass")) == 7 and "muscle_mass" in SYNTHETIC_VITALS

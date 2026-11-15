@@ -808,7 +808,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         )
         result = None
         if is_llm_configured():
-            result = await interpret_with_llm(payload.text, entries=entries)
+            result = await interpret_with_llm(payload.text, entries=entries, lang=payload.lang)
 
         if not result:
             result = interpret(payload.text, entries=entries)
@@ -1041,6 +1041,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         metric: str,
         days: int = Query(7, ge=1, le=90),
         tz_offset_minutes: int = Query(0, ge=-840, le=840),
+        lang: str = Query("es", pattern="^(es|en)$"),
     ):
         db, session = auth
         # rowid desempata registros con el mismo instante por orden de captura
@@ -1059,6 +1060,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             education=res.get("education"),
             recent_entries=rows,
             now=now,
+            lang=lang,
         )
         return res
 

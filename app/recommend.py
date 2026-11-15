@@ -77,6 +77,34 @@ def _classify(metric, values, unit, context):
     return None, None, None
 
 
+IN_RANGE_EN = {
+    "heart_rate": "Your pulse is within the reference range. Keep your training routine and hydration; exercise protects the cardiovascular system in microgravity.",
+    "blood_pressure": "Your blood pressure is within the reference range. Keep hydration and usual sodium intake, and change posture calmly.",
+    "temperature": "Your temperature is within the reference range. Keep the module ventilated and drink water, especially after exercise.",
+    "oxygen_saturation": "Your saturation is within the reference range. Keep watching oxygenation if cabin or suit conditions change.",
+    "glucose": "Your glucose is within the reference range. Keep regular meal times and physical activity.",
+    "muscle_mass": "Muscle record saved. There is no reference range for this value: compare your weekly trend and combine resistance exercise with enough protein.",
+    "sleep": "Your rest is within the reference range. Keep a steady sleep routine and reduce blue light before bed.",
+}
+
+OUT_EN = {
+    ("heart_rate", "high"): "Your pulse is above the reference range. Rest a few minutes, breathe slowly, hydrate and measure again. If it stays high or you feel symptoms, tell the medical team.",
+    ("heart_rate", "low"): "Your pulse is below the reference range. If you feel dizzy, faint or short of breath, tell the medical team; otherwise repeat the measurement at rest.",
+    ("blood_pressure", "high"): "Your blood pressure is above the reference range. Rest seated, cut sodium and caffeine, and measure again in a few minutes. If it persists, consult the medical team.",
+    ("blood_pressure", "low"): "Your blood pressure is below the reference range. Hydrate, change posture slowly and measure again. If you feel dizzy, tell the medical team.",
+    ("temperature", "high"): "Your temperature is above the reference range. Improve ventilation, avoid intense effort, hydrate and measure again in 30 minutes.",
+    ("temperature", "low"): "Your temperature is below the reference range. Keep warm, check the climate control and measure again; tell the team if it persists.",
+    ("oxygen_saturation", "low"): "Your saturation is below the reference range. Breathe calmly, check the sensor and the suit seal or oxygen analyzer, and measure again. If it stays low, report it immediately.",
+    ("glucose", "high"): "Your glucose is above the reference range. Hydrate, avoid simple sugars and measure again according to your context (fasting or after eating).",
+    ("glucose", "low"): "Your glucose is below the reference range. Take a quick source of carbohydrates and measure again in 15 minutes; tell the team if it persists.",
+    ("sleep", "low"): "You slept less than recommended. Prioritize restful sleep today, reduce blue light before bed and keep fixed schedules.",
+    ("sleep", "high"): "You slept more than usual. Keep regular schedules and check for persistent tiredness.",
+}
+
+DISCLAIMER_EN = "General reference, not a diagnosis."
+DISCLAIMER_EN_OUT = "General reference, not a diagnosis. If you have symptoms, contact the medical team."
+
+
 def assess(candidate, context=""):
     """Recomendación + estado para una medición. None si no es una medición."""
     if not isinstance(candidate, dict) or candidate.get("kind") != "measurement":
@@ -89,6 +117,8 @@ def assess(candidate, context=""):
     if direction is None:
         return {
             "text": IN_RANGE[metric],
+            "text_en": IN_RANGE_EN[metric],
+            "disclaimer_en": DISCLAIMER_EN,
             "out_of_range": False,
             "severity": None,
             "reason": None,
@@ -96,8 +126,11 @@ def assess(candidate, context=""):
         }
     return {
         "text": OUT.get((metric, direction), IN_RANGE[metric]),
+        "text_en": OUT_EN.get((metric, direction), IN_RANGE_EN[metric]),
+        "disclaimer_en": DISCLAIMER_EN_OUT,
         "out_of_range": True,
         "severity": severity,
         "reason": reason,
+        "reason_en": reason.replace("referencia", "reference").replace(",", "."),
         "disclaimer": "Referencia general, no es un diagnóstico. Ante síntomas, contacta al equipo médico.",
     }
