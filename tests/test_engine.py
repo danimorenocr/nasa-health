@@ -31,9 +31,7 @@ def test_parse(text, metric, values, unit):
 @pytest.mark.parametrize(
     "text",
     [
-        "Pulso 82",
         "82 lpm",
-        "Pulso 82 y temperatura 37 °C",
         "Presión 120 mmHg",
         "Pulso 82 y 95 lpm",
         "Temperatura 37 °C o °F",
@@ -278,9 +276,11 @@ def test_temperature_spoken_units():
     r_conflict = interpret("temperatura 37 °C o °F")
     assert r_conflict["status"] == "needs_clarification"
 
-    # Missing unit completely still clarifies
+    # Sin unidad se usa la de por defecto (°C), pero el valor sigue siendo obligatorio.
     r_nounit = interpret("temperatura 37")
-    assert r_nounit["status"] == "needs_clarification"
+    assert r_nounit["status"] == "needs_confirmation"
+    assert r_nounit["candidate"]["unit"] == "°C"
+    assert interpret("temperatura")["status"] == "needs_clarification"
 
 
 def test_natural_phrasing_latidos():

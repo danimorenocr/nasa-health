@@ -123,8 +123,14 @@ def _clean_measurement(item: Any, text: str, now_iso: str) -> dict[str, Any] | N
     except (TypeError, ValueError):
         return None
     unit = item.get("unit")
-    if not values or not isinstance(unit, str) or not unit.strip():
+    if not values:
         return None
+    if not isinstance(unit, str) or not unit.strip():
+        from .engine import _infer_unit  # unidad por defecto cuando no se dijo
+
+        unit = _infer_unit(item["metric"], values)
+        if not unit:
+            return None
     return {
         "kind": "measurement",
         "metric": item["metric"],
@@ -141,6 +147,13 @@ def _clean_measurement(item: Any, text: str, now_iso: str) -> dict[str, Any] | N
 def _normalize_candidates(parsed: dict[str, Any], text: str, now_iso: str) -> None:
     """Unifica la salida del LLM: `candidates` (lista) pasa a un `candidate` único o de tipo batch."""
     many = parsed.pop("candidates", None)
+    one = parsed.get("candidate")
+    if isinstance(one, list):
+        # Algunos modelos devuelven la lista de lecturas directamente en "candidate".
+        many = (many if isinstance(many, list) else []) + one
+        parsed["candidate"] = None
+    elif isinstance(one, dict) and "kind" not in one and one.get("metric"):
+        one["kind"] = "measurement"
     if parsed.get("candidate") is None and isinstance(many, list):
         valid = [m for m in (_clean_measurement(i, text, now_iso) for i in many) if m]
         if len(valid) == 1:
@@ -276,6 +289,10 @@ async def interpret_with_llm(
                         if "values" in cand and isinstance(cand["values"], list):
                             cand["values"] = [float(v) for v in cand["values"]]
                         metric = cand.get("metric")
+                        if metric in _VALID_METRICS and cand.get("values") and not str(cand.get("unit") or "").strip():
+                            from .engine import _infer_unit
+
+                            cand["unit"] = _infer_unit(metric, cand["values"])
                         if not cand.get("suggested_origin") and metric in DEFAULT_MISSION_INSTRUMENTS:
                             cand["suggested_origin"] = DEFAULT_MISSION_INSTRUMENTS[metric]
                         if not cand.get("suggested_measured_at"):

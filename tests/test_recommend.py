@@ -49,7 +49,8 @@ def test_muscle_weight_in_kg_is_understood(client):
     assert body["status"] == "needs_confirmation"
     assert body["candidate"]["metric"] == "muscle_mass"
     assert body["candidate"]["values"] == [32.5] and body["candidate"]["unit"] == "kg"
-    assert client.post("/api/v1/messages", headers=headers, json={"text": "Músculos 32"}).json()["status"] == "needs_clarification"
+    default = client.post("/api/v1/messages", headers=headers, json={"text": "Músculos 32"}).json()
+    assert default["status"] == "needs_confirmation" and default["candidate"]["unit"] == "kg"
 
 
 def test_llm_receives_the_page_language(client, monkeypatch):
@@ -102,9 +103,9 @@ def test_spoken_reading_with_instrument_and_time_is_fully_understood(client):
 def test_several_spoken_signs_without_commas_become_one_batch(client):
     headers = auth(client)
     text = "pulso 80 presión 120 sobre 80 saturación 97 temperatura 37 grados centígrados glucosa 95 mg/dl"
-    # Escrito a mano: sin unidad no se asume ninguna.
+    # Escrito o dictado, sin unidad se usa la de por defecto.
     typed = client.post("/api/v1/messages", headers=headers, json={"text": text}).json()
-    assert typed["status"] == "needs_clarification"
+    assert typed["status"] == "needs_confirmation" and len(typed["candidate"]["measurements"]) == 5
     # Dictado por voz: las unidades únicas (lpm, mmHg, %) se asumen; temperatura y glucosa la traen dicha.
     voice = client.post("/api/v1/messages", headers=headers, json={"text": text, "assume_units": True}).json()
     assert voice["status"] == "needs_confirmation" and voice["candidate"]["kind"] == "batch"
@@ -120,8 +121,99 @@ def test_several_spoken_signs_without_commas_become_one_batch(client):
     done = client.post("/api/v1/confirmations", headers=headers, json={"pending_id": voice["pending_id"], "confirmed": True})
     assert done.status_code == 201 and len(done.json()["entries"]) == 5
     assert done.json()["entry"]["origin"] == "Dato declarado"
-    # Temperatura sin unidad sigue pidiéndose aun por voz; y sin valor se pide el valor.
-    no_unit = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 80 temperatura 37", "assume_units": True}).json()
-    assert no_unit["status"] == "needs_clarification"
+    # Temperatura sin unidad usa °C por defecto; y sin valor se pide el valor.
+    no_unit = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 80 temperatura 60"}).json()
+    assert no_unit["status"] == "needs_confirmation"
+    assert {m["metric"]: m["unit"] for m in no_unit["candidate"]["measurements"]}["temperature"] == "°C"
     no_value = client.post("/api/v1/messages", headers=headers, json={"text": "tengo la temperatura en grados centígrados", "assume_units": True}).json()
     assert no_value["status"] == "needs_clarification" and no_value["candidate"] is None
+
+
+SPOKEN = "una presión en sangre de 120/80 una temperatura de 40 grados centígrados he dormido 4 horas mi pulso es de 80 y la glucosa está en 97"
+
+
+def test_spoken_five_signs_without_glucose_unit(client):
+    headers = auth(client)
+    body = client.post("/api/v1/messages", headers=headers, json={"text": SPOKEN, "assume_units": True}).json()
+    assert body["status"] == "needs_confirmation" and body["candidate"]["kind"] == "batch"
+    got = {m["metric"]: (m["values"], m["unit"]) for m in body["candidate"]["measurements"]}
+    assert got == {
+        "blood_pressure": ([120.0, 80.0], "mmHg"),
+        "temperature": ([40.0], "°C"),
+        "sleep": ([4.0], "h"),
+        "heart_rate": ([80.0], "lpm"),
+        "glucose": ([97.0], "mg/dL"),
+    }
+    typed = client.post("/api/v1/messages", headers=headers, json={"text": SPOKEN}).json()
+    assert typed["status"] == "needs_confirmation" and len(typed["candidate"]["measurements"]) == 5
+
+
+def test_llm_candidate_as_a_list_does_not_break_the_response(client, monkeypatch):
+    from app import main
+
+    items = [
+        {"kind": "measurement", "metric": "heart_rate", "values": [80], "unit": "lpm", "original_text": "x"},
+        {"kind": "measurement", "metric": "glucose", "values": [97], "unit": "mg/dL", "original_text": "x"},
+    ]
+
+    async def fake_llm(text, entries=None, lang="es"):
+        from app.llm import _normalize_candidates
+
+        parsed = {"status": "needs_confirmation", "message": "ok", "candidate": list(items), "recommendations": None}
+        _normalize_candidates(parsed, text, "2026-11-15T13:00")
+        parsed.update(content_origin="prototype_template_not_clinical_protocol", rule_set_version="0.2.0",
+                      clinical_assessment="not_performed", communication_sent=False, source_ids=[], recorded=False, llm_used=True)
+        return parsed
+
+    monkeypatch.setattr(main, "is_llm_configured", lambda: True)
+    monkeypatch.setattr(main, "interpret_with_llm", fake_llm)
+    headers = auth(client)
+    r = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 80 lpm y glucosa 97 mg/dl"})
+    assert r.status_code == 200
+    assert r.json()["candidate"]["kind"] == "batch" and len(r.json()["candidate"]["measurements"]) == 2
+
+    async def broken_llm(text, entries=None, lang="es"):
+        return {"status": "needs_confirmation", "message": "x", "candidate": "no es un objeto"}
+
+    monkeypatch.setattr(main, "interpret_with_llm", broken_llm)
+    r = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 82 lpm"})
+    assert r.status_code == 200 and r.json()["candidate"]["values"] == [82.0]
+
+
+def test_readings_that_cannot_be_understood_do_not_block_the_rest(client):
+    headers = auth(client)
+    body = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 80 lpm temperatura saturación 97 por ciento"}).json()
+    assert body["status"] == "needs_confirmation"
+    metrics = {m["metric"] for m in body["candidate"]["measurements"]}
+    assert metrics == {"heart_rate", "oxygen_saturation"}
+    assert body["skipped"] == ["temperatura"] and "No entendí: temperatura" in body["message"]
+
+
+def test_llm_that_skips_readings_or_units_does_not_lose_them(client, monkeypatch):
+    from app import main
+
+    async def fake_llm(text, entries=None, lang="es"):
+        # El LLM solo devolvió la temperatura (la única con unidad).
+        return {
+            "status": "needs_confirmation", "message": "ok",
+            "candidate": {"kind": "measurement", "metric": "temperature", "values": [40.0], "unit": "°C", "original_text": text},
+            "content_origin": "prototype_template_not_clinical_protocol", "rule_set_version": "0.2.0",
+            "clinical_assessment": "not_performed", "communication_sent": False, "source_ids": [], "recorded": False, "llm_used": True,
+        }
+
+    monkeypatch.setattr(main, "is_llm_configured", lambda: True)
+    monkeypatch.setattr(main, "interpret_with_llm", fake_llm)
+    headers = auth(client)
+    r = client.post("/api/v1/messages", headers=headers, json={"text": "temperatura 40 grados centígrados pulso 80 presión 120/80 glucosa 97"}).json()
+    got = {m["metric"] for m in r["candidate"]["measurements"]}
+    assert got == {"temperature", "heart_rate", "blood_pressure", "glucose"}
+
+
+def test_llm_reading_without_unit_gets_the_default_unit():
+    from app.llm import _clean_measurement
+
+    item = {"metric": "heart_rate", "values": [80]}
+    cleaned = _clean_measurement(item, "pulso 80", "2026-11-15T10:00")
+    assert cleaned and cleaned["unit"] == "lpm"
+    assert _clean_measurement({"metric": "glucose", "values": [97]}, "x", "2026-11-15T10:00")["unit"] == "mg/dL"
+    assert _clean_measurement({"metric": "heart_rate", "values": []}, "x", "2026-11-15T10:00") is None

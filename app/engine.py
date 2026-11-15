@@ -696,7 +696,7 @@ DESCRIPTORS = [
 
 
 # Indicadores con una sola unidad posible. Solo se asume al dictar por voz (assume_units).
-_ASSUME_UNITS = contextvars.ContextVar("assume_units", default=False)
+_ASSUME_UNITS = contextvars.ContextVar("assume_units", default=True)
 SINGLE_UNIT = {
     "heart_rate": "lpm",
     "blood_pressure": "mmHg",
@@ -704,6 +704,18 @@ SINGLE_UNIT = {
     "sleep": "h",
     "muscle_mass": "kg",
 }
+
+
+def _infer_unit(metric, values):
+    """Por voz: si el valor solo es plausible en una unidad, se deduce (97 de glucosa = mg/dL)."""
+    if not values:
+        return None
+    v = values[0]
+    if metric == "glucose":
+        return "mmol/L" if v <= 25 else "mg/dL"  # por defecto mg/dL
+    if metric == "temperature":
+        return "°F" if 86 <= v <= 113 else "°C"  # por defecto °C
+    return SINGLE_UNIT.get(metric)
 
 
 def _missing_value_message(metric):
@@ -718,7 +730,7 @@ def _missing_value_message(metric):
 def split_before_new_indicators(text):
     """Separa lecturas dichas de corrido ("pulso 80 lpm temperatura 37 grados saturación 97 por ciento").
 
-    Inserta un ';' antes de un indicador distinto cuando la lectura anterior ya trae un número.
+    Inserta un ';' cada vez que cambia el indicador mencionado.
     """
     norm = normalize(text)
     if len(norm) != len(text):
@@ -730,13 +742,9 @@ def split_before_new_indicators(text):
     )
     cuts = []
     prev_metric = None
-    prev_start = None
     for start, metric in hits:
-        if prev_metric is not None and metric != prev_metric and re.search(r"\d", norm[prev_start:start]):
+        if prev_metric is not None and metric != prev_metric:
             cuts.append(start)
-            prev_start = start
-        elif prev_metric is None or metric != prev_metric:
-            prev_start = start
         prev_metric = metric
     out = text
     for pos in sorted(cuts, reverse=True):
@@ -787,7 +795,7 @@ def parse_single_measurement_clause(s_clause, original_clause):
         unit = "kg"
 
     if not unit and _ASSUME_UNITS.get():
-        unit = SINGLE_UNIT.get(metric)
+        unit = _infer_unit(metric, values)
     if not unit:
         return {"error": "missing_unit", "metric": metric}
 
@@ -800,7 +808,7 @@ def parse_single_measurement_clause(s_clause, original_clause):
     }
 
 
-def interpret(text, entries=None, assume_units=False):
+def interpret(text, entries=None, assume_units=True):
     token = _ASSUME_UNITS.set(bool(assume_units))
     try:
         return _interpret(text, entries)
@@ -898,18 +906,25 @@ def _interpret(text, entries=None):
     # 3. Intento de extracción multi-métrica (ej. si el audio dice pulso X y temperatura Y)
     if len(matches) > 1:
         clause_split = r"(?<=[^\d/])\s+y\s+|(?<!\d)\s*,\s*|\s*,\s*(?!\d)|\s*;\s*|\s+ademas\s+|\s+e\s+"
-        text_num = split_before_new_indicators(convert_spanish_spoken_numbers(text))
-        s = split_before_new_indicators(s)
-        raw_clauses = [
-            c.strip()
-            for c in re.split(clause_split, text_num, flags=re.IGNORECASE)
-            if c.strip()
-        ]
-        s_clauses = [
-            c.strip()
-            for c in re.split(clause_split, s)
-            if c.strip()
-        ]
+        text_num = convert_spanish_spoken_numbers(text)
+
+        def split_clauses(value, flags=0):
+            # Primero por comas y "y"; solo las partes con varios indicadores se separan por indicador
+            # (así "80 de pulso, 120 sobre 80 de presión" conserva cada número con su indicador).
+            parts = []
+            for chunk in re.split(clause_split, value, flags=flags):
+                chunk = chunk.strip()
+                if not chunk:
+                    continue
+                kinds = {m for m, pattern in DESCRIPTORS if re.search(pattern, normalize(chunk))}
+                if len(kinds) > 1:
+                    parts.extend(c.strip() for c in re.split(r"\s*;\s*", split_before_new_indicators(chunk)) if c.strip())
+                else:
+                    parts.append(chunk)
+            return parts
+
+        raw_clauses = split_clauses(text_num, re.IGNORECASE)
+        s_clauses = split_clauses(s)
         if len(s_clauses) > 1:
             if len(raw_clauses) != len(s_clauses):
                 raw_clauses = s_clauses
@@ -922,11 +937,12 @@ def _interpret(text, entries=None):
             conflict_errors = [p for p in active_results if p.get("error") == "conflict_units"]
             bad_val_errors = [p for p in active_results if p.get("error") == "bad_values"]
             no_value_errors = [p for p in active_results if p.get("error") == "missing_value"]
-            if no_value_errors:
+            valid_measurements = [p for p in active_results if p.get("kind") == "measurement"]
+            if no_value_errors and not valid_measurements:
                 return reply("needs_clarification", _missing_value_message(no_value_errors[0]["metric"]))
-            if conflict_errors:
+            if conflict_errors and not valid_measurements:
                 return reply("needs_clarification", "Hay dos unidades. Envía una sola lectura con una única unidad.")
-            if missing_errors:
+            if missing_errors and not valid_measurements:
                 metric_err = missing_errors[0]["metric"]
                 label_err = METRIC_LABELS.get(metric_err, metric_err)
                 return reply(
@@ -934,13 +950,19 @@ def _interpret(text, entries=None):
                     f"Falta una unidad compatible para {label_err}. Especifica lpm, "
                     "°C/°F, mmHg, %, mg/dL, mmol/L, kg u horas según el indicador. No asumo unidades.",
                 )
-            if bad_val_errors:
+            if bad_val_errors and not valid_measurements:
                 return reply(
                     "needs_clarification",
                     "No pude separar una lectura inequívoca. Escribe indicador, "
                     "valor y unidad (por ejemplo, presión 120/80 mmHg). No he guardado nada.",
                 )
 
+            skipped = [
+                METRIC_LABELS.get(p["metric"], p["metric"])
+                for p in active_results
+                if p.get("error") and p.get("metric")
+            ]
+            skipped_note = f" No entendí: {', '.join(skipped)}; no se guardó eso." if skipped else ""
             valid_measurements = [p for p in active_results if p.get("kind") == "measurement"]
             if len(valid_measurements) > 1:
                 batch_origin = suggested_origin or "Instrumentos de cabina"
@@ -953,8 +975,10 @@ def _interpret(text, entries=None):
                 cand["suggested_measured_at"] = suggested_iso or now_fallback
                 cand["explicit_origin"] = bool(suggested_origin)
                 cand["explicit_time"] = _explicit_time(suggested_iso, suggested_str)
-                msg = build_batch_confirmation_message(valid_measurements, batch_origin, suggested_str)
-                return reply("needs_confirmation", msg, cand)
+                msg = build_batch_confirmation_message(valid_measurements, batch_origin, suggested_str) + skipped_note
+                result = reply("needs_confirmation", msg, cand)
+                result["skipped"] = skipped
+                return result
             if len(valid_measurements) == 1:
                 cand = valid_measurements[0]
                 cand["original_text"] = text
@@ -963,8 +987,10 @@ def _interpret(text, entries=None):
                 cand["suggested_measured_at"] = suggested_iso or datetime.now().strftime("%Y-%m-%dT%H:%M")
                 cand["explicit_origin"] = bool(suggested_origin)
                 cand["explicit_time"] = _explicit_time(suggested_iso, suggested_str)
-                msg = build_confirmation_message(cand, origin_final, suggested_str)
-                return reply("needs_confirmation", msg, cand)
+                msg = build_confirmation_message(cand, origin_final, suggested_str) + skipped_note
+                result = reply("needs_confirmation", msg, cand)
+                result["skipped"] = skipped
+                return result
 
         return reply(
             "needs_clarification", "Registra un indicador por mensaje para no mezclar valores y unidades."
@@ -1008,7 +1034,7 @@ def _interpret(text, entries=None):
         elif metric == "muscle_mass" and re.search(r"\b(kg|kilos?|kilogramos?)\b", s):
             unit = "kg"
         if not unit and _ASSUME_UNITS.get():
-            unit = SINGLE_UNIT.get(metric)
+            unit = _infer_unit(metric, values)
         if not unit:
             return reply(
                 "needs_clarification",

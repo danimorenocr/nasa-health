@@ -14,7 +14,7 @@ class StrictModel(BaseModel):
 class MessageInput(StrictModel):
     text: str = Field(min_length=1, max_length=2000)
     lang: Literal["es", "en"] = "es"
-    assume_units: bool = False  # dictado por voz: asume la unidad cuando el indicador solo tiene una
+    assume_units: bool = True  # sin unidad dicha se usa la de por defecto (lpm, mmHg, %, °C, mg/dL, h, kg)
 
 
 class LoginInput(StrictModel):
@@ -172,6 +172,7 @@ class MessageOut(BaseModel):
     recorded: Literal[False]
     recommendations: list[str] | str | None = None
     llm_used: bool = False
+    skipped: list[str] = []  # indicadores dichos que no se pudieron entender
 
 
 class EntryOut(BaseModel):

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
+from pydantic import TypeAdapter, ValidationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -41,6 +42,7 @@ from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_co
 from .recommend import assess
 from .research import ResearchUnavailable, import_study
 from .schemas import (
+    Candidate,
     AuthOut,
     CheckInInput,
     ConfirmInput,
@@ -117,6 +119,42 @@ def new_password(password):
 def password_matches(password, salt_hex, expected):
     actual = password_digest(password, bytes.fromhex(salt_hex))
     return secrets.compare_digest(actual, expected)
+
+
+_CANDIDATE_SCHEMA = TypeAdapter(Candidate)
+
+
+def _merge_local_readings(result, local):
+    """Si el LLM se saltó lecturas que el motor local sí entendió, se agregan al mismo lote."""
+    def items(candidate):
+        if not isinstance(candidate, dict):
+            return None
+        if candidate.get("kind") == "batch":
+            return list(candidate.get("measurements") or [])
+        if candidate.get("kind") == "measurement":
+            return [candidate]
+        return None
+
+    llm_cand = result.get("candidate")
+    llm_items = items(llm_cand)
+    local_items = items((local or {}).get("candidate"))
+    if result.get("status") != "needs_confirmation" or not llm_items or not local_items:
+        return result
+    have = {m.get("metric") for m in llm_items}
+    extra = [m for m in local_items if m.get("metric") not in have]
+    if not extra:
+        return result
+    merged = llm_items + extra
+    result["candidate"] = {
+        "kind": "batch",
+        "measurements": merged,
+        "original_text": llm_cand.get("original_text"),
+        "suggested_origin": llm_cand.get("suggested_origin"),
+        "suggested_measured_at": llm_cand.get("suggested_measured_at"),
+        "explicit_origin": bool(llm_cand.get("explicit_origin")),
+        "explicit_time": bool(llm_cand.get("explicit_time")),
+    }
+    return result
 
 
 def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
@@ -865,11 +903,18 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             )
         )
         result = None
+        local = interpret(payload.text, entries=entries, assume_units=payload.assume_units)
         if is_llm_configured():
             result = await interpret_with_llm(payload.text, entries=entries, lang=payload.lang)
+            if result is not None:
+                try:
+                    if result.get("candidate") is not None:
+                        _CANDIDATE_SCHEMA.validate_python(result["candidate"])
+                except ValidationError:
+                    # Respuesta del LLM con forma inválida: se usa el motor local.
+                    result = None
 
-        if not result:
-            result = interpret(payload.text, entries=entries, assume_units=payload.assume_units)
+        result = _merge_local_readings(result, local) if result else local
 
         session.pending = result.get("candidate")
         session.pending_id = str(uuid4()) if session.pending else None
