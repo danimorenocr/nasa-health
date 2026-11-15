@@ -110,6 +110,49 @@ def is_llm_configured() -> bool:
     return get_llm_config() is not None
 
 
+_VALID_METRICS = {"heart_rate", "temperature", "blood_pressure", "oxygen_saturation", "glucose", "sleep"}
+
+
+def _clean_measurement(item: Any, text: str, now_iso: str) -> dict[str, Any] | None:
+    """Devuelve una medición con la forma del esquema, o None si no es válida."""
+    if not isinstance(item, dict) or item.get("metric") not in _VALID_METRICS:
+        return None
+    try:
+        values = [float(v) for v in item.get("values", [])]
+    except (TypeError, ValueError):
+        return None
+    unit = item.get("unit")
+    if not values or not isinstance(unit, str) or not unit.strip():
+        return None
+    return {
+        "kind": "measurement",
+        "metric": item["metric"],
+        "values": values,
+        "unit": unit.strip(),
+        "original_text": item.get("original_text") or text,
+        "suggested_origin": item.get("suggested_origin") or DEFAULT_MISSION_INSTRUMENTS.get(item["metric"]),
+        "suggested_measured_at": item.get("suggested_measured_at") or now_iso,
+    }
+
+
+def _normalize_candidates(parsed: dict[str, Any], text: str, now_iso: str) -> None:
+    """Unifica la salida del LLM: `candidates` (lista) pasa a un `candidate` único o de tipo batch."""
+    many = parsed.pop("candidates", None)
+    if parsed.get("candidate") is None and isinstance(many, list):
+        valid = [m for m in (_clean_measurement(i, text, now_iso) for i in many) if m]
+        if len(valid) == 1:
+            parsed["candidate"] = valid[0]
+        elif len(valid) > 1:
+            parsed["candidate"] = {
+                "kind": "batch",
+                "measurements": valid,
+                "original_text": text,
+                "suggested_origin": parsed.get("suggested_origin") or "Instrumentos de cabina",
+                "suggested_measured_at": valid[0]["suggested_measured_at"],
+            }
+    parsed.setdefault("candidate", None)
+
+
 async def interpret_with_llm(
     text: str,
     entries: list[Any] | None = None,
@@ -210,6 +253,11 @@ async def interpret_with_llm(
                 content = data["choices"][0]["message"]["content"]
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and "status" in parsed:
+                    _normalize_candidates(parsed, text, now_iso)
+                    if parsed.get("status") == "needs_confirmation" and not parsed.get("candidate"):
+                        # Propuesta sin candidato válido: no se puede confirmar; usa el motor local.
+                        logger.warning("El LLM propuso confirmación sin candidato válido; uso motor local.")
+                        return None
                     cand = parsed.get("candidate")
                     if cand and isinstance(cand, dict):
                         if not cand.get("original_text"):

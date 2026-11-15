@@ -166,7 +166,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
                 "X-Content-Type-Options": "nosniff",
                 "Referrer-Policy": "no-referrer",
                 "X-Frame-Options": "DENY",
-                "Permissions-Policy": "microphone=(), camera=()",
+                "Permissions-Policy": "microphone=(self), camera=()",
             }
         )
         if request.url.path not in {"/docs", "/redoc"}:
