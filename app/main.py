@@ -118,7 +118,12 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         title="Salud espacial - backend textual de prueba",
         version="0.3.0",
         lifespan=lifespan,
-        description="Solo datos ficticios. No diagnóstico, triage, ML ni LLM; sin procesamiento de voz en el servidor. Persistencia SQLite local.",
+        description=(
+            "Prototipo con datos ficticios; no es diagnóstico ni triage médico. "
+            "Interpretación de lenguaje natural con LLM opcional (con heurística local de respaldo) "
+            "y transcripción de notas de voz reenviada a un proveedor externo solo si el servidor tiene clave configurada. "
+            "Persistencia SQLite local."
+        ),
     )
     app.state.engine = engine
     app.state.factory = factory
@@ -134,18 +139,22 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         if origin and urlparse(origin).netloc != host:
             response = error(403, "Origen no permitido.")
         elif request.method in {"POST", "PUT", "PATCH"} and request.url.path.startswith("/api/"):
+            # Las notas de voz son audio binario y necesitan un límite mayor; el resto sigue en 8 KiB.
+            is_audio = request.url.path == "/api/v1/transcribe"
+            max_body = 10 * 1024 * 1024 + 1024 if is_audio else 8192
+            max_label = "10 MiB" if is_audio else "8 KiB"
             length = request.headers.get("content-length")
-            if length and (not length.isdigit() or int(length) > 8192):
-                response = error(413, "Cuerpo demasiado grande o tamaño inválido (máximo 8 KiB).")
+            if length and (not length.isdigit() or int(length) > max_body):
+                response = error(413, f"Cuerpo demasiado grande o tamaño inválido (máximo {max_label}).")
             else:
                 # Stream in bounded chunks, including requests without Content-Length.
                 body = bytearray()
                 async for chunk in request.stream():
                     body.extend(chunk)
-                    if len(body) > 8192:
+                    if len(body) > max_body:
                         break
-                if len(body) > 8192:
-                    response = error(413, "Cuerpo demasiado grande (máximo 8 KiB).")
+                if len(body) > max_body:
+                    response = error(413, f"Cuerpo demasiado grande (máximo {max_label}).")
                 else:
                     request._body = bytes(body)
                     response = await limited_call(request, call_next, now)
