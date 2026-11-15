@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Salud espacial - backend textual de prueba",
-    "description": "Solo datos ficticios. No diagnóstico, triage, ML ni LLM; sin procesamiento de voz en el servidor. Persistencia SQLite local.",
+    "description": "Prototipo con datos ficticios; no es diagnóstico ni triage médico. Interpretación de lenguaje natural con LLM opcional (con heurística local de respaldo) y transcripción de notas de voz reenviada a un proveedor externo solo si el servidor tiene clave configurada. Persistencia SQLite local.",
     "version": "0.3.0"
   },
   "paths": {
@@ -493,6 +493,50 @@
         }
       }
     },
+    "/api/v1/transcribe": {
+      "post": {
+        "summary": "Transcribe",
+        "operationId": "transcribe_api_v1_transcribe_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entries": {
       "get": {
         "summary": "Entries",
@@ -924,6 +968,55 @@
         ],
         "title": "AuthOut"
       },
+      "BatchMeasurementCandidate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "batch",
+            "title": "Kind"
+          },
+          "measurements": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementCandidate"
+            },
+            "type": "array",
+            "title": "Measurements"
+          },
+          "original_text": {
+            "type": "string",
+            "title": "Original Text"
+          },
+          "suggested_origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Origin"
+          },
+          "suggested_measured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Measured At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "measurements",
+          "original_text"
+        ],
+        "title": "BatchMeasurementCandidate"
+      },
       "ConfirmInput": {
         "properties": {
           "pending_id": {
@@ -1022,6 +1115,9 @@
               },
               {
                 "$ref": "#/components/schemas/SymptomCandidate"
+              },
+              {
+                "$ref": "#/components/schemas/BatchMeasurementCandidate"
               }
             ],
             "title": "Candidate"
@@ -1231,6 +1327,28 @@
           "original_text": {
             "type": "string",
             "title": "Original Text"
+          },
+          "suggested_origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Origin"
+          },
+          "suggested_measured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Measured At"
           }
         },
         "type": "object",
@@ -1282,6 +1400,9 @@
               },
               {
                 "$ref": "#/components/schemas/SymptomCandidate"
+              },
+              {
+                "$ref": "#/components/schemas/BatchMeasurementCandidate"
               },
               {
                 "type": "null"
@@ -1341,6 +1462,28 @@
             "type": "boolean",
             "const": false,
             "title": "Recorded"
+          },
+          "recommendations": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendations"
+          },
+          "llm_used": {
+            "type": "boolean",
+            "title": "Llm Used",
+            "default": false
           }
         },
         "type": "object",
@@ -1387,6 +1530,20 @@
           },
           "entry": {
             "$ref": "#/components/schemas/EntryOut"
+          },
+          "entries": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntryOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entries"
           },
           "clinical_assessment": {
             "type": "string",
