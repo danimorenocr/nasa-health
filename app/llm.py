@@ -133,6 +133,8 @@ def _clean_measurement(item: Any, text: str, now_iso: str) -> dict[str, Any] | N
         "original_text": item.get("original_text") or text,
         "suggested_origin": item.get("suggested_origin") or DEFAULT_MISSION_INSTRUMENTS.get(item["metric"]),
         "suggested_measured_at": item.get("suggested_measured_at") or now_iso,
+        "explicit_origin": item.get("explicit_origin") is True,
+        "explicit_time": item.get("explicit_time") is True,
     }
 
 
@@ -205,7 +207,9 @@ async def interpret_with_llm(
         "   - Para glucose: 'Glucómetro capilar telemétrico'\n"
         "   - Para sleep: 'Sensor de biotelemetría de sueño'\n"
         "   - Para muscle_mass: 'Báscula de composición corporal'\n"
-        "¡NUNCA dejes 'suggested_origin' en null o vacío si identificaste una métrica!\n\n"
+        "¡NUNCA dejes 'suggested_origin' en null o vacío si identificaste una métrica!\n"
+        "Además, en cada medición agrega dos banderas booleanas: 'explicit_origin' = true SOLO si el usuario dijo con qué instrumento se midió (no si lo asumiste); "
+        "'explicit_time' = true SOLO si el usuario dijo la hora o la fecha de la medición (no si usaste la actual).\n\n"
         "REGLAS DE SEGURIDAD Y CONFIRMACIÓN:\n"
         "- Si el texto reporta posibles emergencias críticas (dolor en el pecho, falta de aire súbita, sangrado profuso), responde con status: 'safety_notice'.\n"
         "- Si es una lectura válida, usa status: 'needs_confirmation'. En 'message', confirma haber recibido la telemetría con tono ingenioso de misión espacial, menciona el indicador, valor, origen asumido/detectado y fecha/hora, y pide verificar en el formulario antes de confirmar.\n\n"
@@ -230,7 +234,9 @@ async def interpret_with_llm(
         '    "unit": "lpm",\n'
         '    "original_text": "...",\n'
         '    "suggested_origin": "Oxímetro",\n'
-        '    "suggested_measured_at": "2026-11-13T11:00"\n'
+        '    "suggested_measured_at": "2026-11-13T11:00",\n'
+        '    "explicit_origin": true,\n'
+        '    "explicit_time": true\n'
         "  },\n"
         '  "recommendations": "Recomendación coherente con la NASA y las circunstancias..."\n'
         "}"

@@ -14,6 +14,7 @@ class StrictModel(BaseModel):
 class MessageInput(StrictModel):
     text: str = Field(min_length=1, max_length=2000)
     lang: Literal["es", "en"] = "es"
+    assume_units: bool = False  # dictado por voz: asume la unidad cuando el indicador solo tiene una
 
 
 class LoginInput(StrictModel):
@@ -105,7 +106,7 @@ class AuthOut(BaseModel):
 class ConfirmInput(StrictModel):
     pending_id: UUID
     confirmed: Literal[True]
-    origin: str = Field(min_length=2, max_length=120)
+    origin: str = Field(default="", max_length=120)  # el instrumento es opcional
     context: str = Field(default="", max_length=500)
     measured_at: datetime | None = None
 
@@ -127,6 +128,8 @@ class MeasurementCandidate(BaseModel):
     original_text: str
     suggested_origin: str | None = None
     suggested_measured_at: str | None = None
+    explicit_origin: bool = False
+    explicit_time: bool = False
 
 
 class SymptomCandidate(BaseModel):
@@ -140,6 +143,8 @@ class BatchMeasurementCandidate(BaseModel):
     original_text: str
     suggested_origin: str | None = None
     suggested_measured_at: str | None = None
+    explicit_origin: bool = False
+    explicit_time: bool = False
 
 
 Candidate = MeasurementCandidate | SymptomCandidate | BatchMeasurementCandidate

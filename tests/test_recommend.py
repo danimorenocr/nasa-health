@@ -84,3 +84,44 @@ def client_synthetic_has_muscle():
     from app.vitals import SYNTHETIC_VITALS, synthetic_payload
 
     return len(synthetic_payload("muscle_mass")) == 7 and "muscle_mass" in SYNTHETIC_VITALS
+
+
+def test_spoken_reading_with_instrument_and_time_is_fully_understood(client):
+    headers = auth(client)
+    text = "tengo una temperatura de 40 grados centígrados me lo tomé con un termómetro y me lo tomé a las 12 y 42 pm"
+    body = client.post("/api/v1/messages", headers=headers, json={"text": text}).json()
+    cand = body["candidate"]
+    assert body["status"] == "needs_confirmation"
+    assert cand["values"] == [40.0] and cand["unit"] == "°C"
+    assert cand["suggested_origin"] == "Termómetro" and cand["explicit_origin"] is True
+    assert cand["suggested_measured_at"].endswith("T12:42") and cand["explicit_time"] is True
+    partial = client.post("/api/v1/messages", headers=headers, json={"text": "tengo una temperatura de 40 grados centígrados"}).json()["candidate"]
+    assert partial["explicit_origin"] is False and partial["explicit_time"] is False
+
+
+def test_several_spoken_signs_without_commas_become_one_batch(client):
+    headers = auth(client)
+    text = "pulso 80 presión 120 sobre 80 saturación 97 temperatura 37 grados centígrados glucosa 95 mg/dl"
+    # Escrito a mano: sin unidad no se asume ninguna.
+    typed = client.post("/api/v1/messages", headers=headers, json={"text": text}).json()
+    assert typed["status"] == "needs_clarification"
+    # Dictado por voz: las unidades únicas (lpm, mmHg, %) se asumen; temperatura y glucosa la traen dicha.
+    voice = client.post("/api/v1/messages", headers=headers, json={"text": text, "assume_units": True}).json()
+    assert voice["status"] == "needs_confirmation" and voice["candidate"]["kind"] == "batch"
+    got = {m["metric"]: (m["values"], m["unit"]) for m in voice["candidate"]["measurements"]}
+    assert got == {
+        "heart_rate": ([80.0], "lpm"),
+        "blood_pressure": ([120.0, 80.0], "mmHg"),
+        "oxygen_saturation": ([97.0], "%"),
+        "temperature": ([37.0], "°C"),
+        "glucose": ([95.0], "mg/dL"),
+    }
+    # El instrumento es opcional: sin origen se guarda como "Dato declarado".
+    done = client.post("/api/v1/confirmations", headers=headers, json={"pending_id": voice["pending_id"], "confirmed": True})
+    assert done.status_code == 201 and len(done.json()["entries"]) == 5
+    assert done.json()["entry"]["origin"] == "Dato declarado"
+    # Temperatura sin unidad sigue pidiéndose aun por voz; y sin valor se pide el valor.
+    no_unit = client.post("/api/v1/messages", headers=headers, json={"text": "pulso 80 temperatura 37", "assume_units": True}).json()
+    assert no_unit["status"] == "needs_clarification"
+    no_value = client.post("/api/v1/messages", headers=headers, json={"text": "tengo la temperatura en grados centígrados", "assume_units": True}).json()
+    assert no_value["status"] == "needs_clarification" and no_value["candidate"] is None

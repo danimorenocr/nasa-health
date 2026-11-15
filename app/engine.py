@@ -1,5 +1,6 @@
 """Reglas de formato demostrativas, NO algoritmo clínico ni clasificador validado."""
 
+import contextvars
 import re
 import unicodedata
 from collections import defaultdict
@@ -309,6 +310,11 @@ def _parse_int_phrase(tokens, start_idx):
 
 def _parse_number_at(tokens, start_idx):
     tok = tokens[start_idx]
+    if normalize(tok) in {"un", "una"} and not (
+        start_idx + 1 < len(tokens) and normalize(tokens[start_idx + 1]) in {"coma", "punto", "sobre"}
+    ):
+        # Artículo ("tengo una temperatura de..."), no la cifra 1.
+        return None, start_idx
     if tok.isdigit():
         val1 = int(tok)
         next_idx = start_idx + 1
@@ -465,7 +471,7 @@ def extract_origin_info(text):
             break
     if not origin:
         gen_match = re.search(
-            r"\b(?:(?:lo\s+(?:hice|med[ií])|medid[oa]|tomad[oa])\s+)?(?:con|en|usando|utilizando)\s+(?:(?:un[a]?|1|el|la|mi)\s+)?([a-záéíóúñA-ZÁÉÍÓÚÑ0-9\s-]{3,30}?)(?=\s+(?:y\s+eso|eso\s+fue|el\s+\d|a\s+las?|ayer|hoy|\.)|$)",
+            r"\b(?:(?:lo\s+(?:hice|med[ií])|medid[oa]|tomad[oa])\s+)?(?:con|en|usando|utilizando)\s+(?:(?:un[a]?|1|el|la|mi)\s+)?([a-záéíóúñA-ZÁÉÍÓÚÑ\s-]{3,30}?)(?=\s+(?:y\s+eso|eso\s+fue|el\s+\d|a\s+las?|ayer|hoy|\.)|$)",
             text,
             re.IGNORECASE,
         )
@@ -500,7 +506,8 @@ DEFAULT_INSTRUMENTS = {
 def extract_time_clause(text):
     time_regex = (
         r"(?:(?:y\s+)?(?:eso\s+fue\s+|fue\s+|a\s+las?|a\s+la))\s+"
-        r"(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.|de la mañana|de la tarde|de la noche)\b"
+        r"(\d{1,2})(?:(?::|\s+y\s+|\s+con\s+)(\d{2}))?\s*"
+        r"(am|pm|a\.\s?m\.?|p\.\s?m\.?|de la mañana|de la tarde|de la noche)(?!\w)"
     )
     m = re.search(time_regex, text, re.IGNORECASE)
     if m:
@@ -638,6 +645,11 @@ def extract_datetime_info(text, now=None):
     return None, None, None
 
 
+def _explicit_time(suggested_iso, suggested_str):
+    """True solo si la persona dijo una hora concreta ("a las 12:42 pm"), no un valor por defecto."""
+    return bool(suggested_iso and suggested_str and re.search(r"\ba las? \d", suggested_str))
+
+
 def build_confirmation_message(cand, suggested_origin=None, suggested_measured_at_str=None):
     metric = cand.get("metric")
     label = METRIC_LABELS.get(metric, metric)
@@ -683,6 +695,55 @@ DESCRIPTORS = [
 ]
 
 
+# Indicadores con una sola unidad posible. Solo se asume al dictar por voz (assume_units).
+_ASSUME_UNITS = contextvars.ContextVar("assume_units", default=False)
+SINGLE_UNIT = {
+    "heart_rate": "lpm",
+    "blood_pressure": "mmHg",
+    "oxygen_saturation": "%",
+    "sleep": "h",
+    "muscle_mass": "kg",
+}
+
+
+def _missing_value_message(metric):
+    label = METRIC_LABELS.get(metric, metric)
+    example = METRIC_EXAMPLES.get(metric, "")
+    return (
+        f"Falta el valor de {label}: es obligatorio. Dime o escribe cuánto marcó"
+        f"{f' (por ejemplo, {example})' if example else ''}. El instrumento es opcional. No he guardado nada."
+    )
+
+
+def split_before_new_indicators(text):
+    """Separa lecturas dichas de corrido ("pulso 80 lpm temperatura 37 grados saturación 97 por ciento").
+
+    Inserta un ';' antes de un indicador distinto cuando la lectura anterior ya trae un número.
+    """
+    norm = normalize(text)
+    if len(norm) != len(text):
+        return text
+    hits = sorted(
+        (m.start(), metric)
+        for metric, pattern in DESCRIPTORS
+        for m in re.finditer(pattern, norm)
+    )
+    cuts = []
+    prev_metric = None
+    prev_start = None
+    for start, metric in hits:
+        if prev_metric is not None and metric != prev_metric and re.search(r"\d", norm[prev_start:start]):
+            cuts.append(start)
+            prev_start = start
+        elif prev_metric is None or metric != prev_metric:
+            prev_start = start
+        prev_metric = metric
+    out = text
+    for pos in sorted(cuts, reverse=True):
+        out = out[:pos].rstrip() + " ; " + out[pos:]
+    return out
+
+
 def parse_single_measurement_clause(s_clause, original_clause):
     matches = [
         metric
@@ -695,6 +756,8 @@ def parse_single_measurement_clause(s_clause, original_clause):
     numeric = re.sub(r"(\d),(\d)", r"\1.\2", s_clause.replace("spo2", "saturacion"))
     values = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", numeric)]
     expected = 2 if metric == "blood_pressure" else 1
+    if not values:
+        return {"error": "missing_value", "metric": metric}
     if len(values) != expected or re.search(r"-\s*\d", s_clause):
         return {"error": "bad_values", "metric": metric}
 
@@ -723,6 +786,8 @@ def parse_single_measurement_clause(s_clause, original_clause):
     elif metric == "muscle_mass" and re.search(r"\b(kg|kilos?|kilogramos?)\b", s_clause):
         unit = "kg"
 
+    if not unit and _ASSUME_UNITS.get():
+        unit = SINGLE_UNIT.get(metric)
     if not unit:
         return {"error": "missing_unit", "metric": metric}
 
@@ -735,7 +800,15 @@ def parse_single_measurement_clause(s_clause, original_clause):
     }
 
 
-def interpret(text, entries=None):
+def interpret(text, entries=None, assume_units=False):
+    token = _ASSUME_UNITS.set(bool(assume_units))
+    try:
+        return _interpret(text, entries)
+    finally:
+        _ASSUME_UNITS.reset(token)
+
+
+def _interpret(text, entries=None):
     text = text.strip()
     full_s_raw = normalize(text)
     if re.search(
@@ -825,7 +898,8 @@ def interpret(text, entries=None):
     # 3. Intento de extracción multi-métrica (ej. si el audio dice pulso X y temperatura Y)
     if len(matches) > 1:
         clause_split = r"(?<=[^\d/])\s+y\s+|(?<!\d)\s*,\s*|\s*,\s*(?!\d)|\s*;\s*|\s+ademas\s+|\s+e\s+"
-        text_num = convert_spanish_spoken_numbers(text)
+        text_num = split_before_new_indicators(convert_spanish_spoken_numbers(text))
+        s = split_before_new_indicators(s)
         raw_clauses = [
             c.strip()
             for c in re.split(clause_split, text_num, flags=re.IGNORECASE)
@@ -847,6 +921,9 @@ def interpret(text, entries=None):
             missing_errors = [p for p in active_results if p.get("error") == "missing_unit"]
             conflict_errors = [p for p in active_results if p.get("error") == "conflict_units"]
             bad_val_errors = [p for p in active_results if p.get("error") == "bad_values"]
+            no_value_errors = [p for p in active_results if p.get("error") == "missing_value"]
+            if no_value_errors:
+                return reply("needs_clarification", _missing_value_message(no_value_errors[0]["metric"]))
             if conflict_errors:
                 return reply("needs_clarification", "Hay dos unidades. Envía una sola lectura con una única unidad.")
             if missing_errors:
@@ -874,6 +951,8 @@ def interpret(text, entries=None):
                 cand = {"kind": "batch", "measurements": valid_measurements, "original_text": text}
                 cand["suggested_origin"] = batch_origin
                 cand["suggested_measured_at"] = suggested_iso or now_fallback
+                cand["explicit_origin"] = bool(suggested_origin)
+                cand["explicit_time"] = _explicit_time(suggested_iso, suggested_str)
                 msg = build_batch_confirmation_message(valid_measurements, batch_origin, suggested_str)
                 return reply("needs_confirmation", msg, cand)
             if len(valid_measurements) == 1:
@@ -882,6 +961,8 @@ def interpret(text, entries=None):
                 origin_final = suggested_origin or DEFAULT_INSTRUMENTS.get(cand.get("metric"), "Instrumento declarado")
                 cand["suggested_origin"] = origin_final
                 cand["suggested_measured_at"] = suggested_iso or datetime.now().strftime("%Y-%m-%dT%H:%M")
+                cand["explicit_origin"] = bool(suggested_origin)
+                cand["explicit_time"] = _explicit_time(suggested_iso, suggested_str)
                 msg = build_confirmation_message(cand, origin_final, suggested_str)
                 return reply("needs_confirmation", msg, cand)
 
@@ -893,6 +974,8 @@ def interpret(text, entries=None):
         numeric = re.sub(r"(\d),(\d)", r"\1.\2", s.replace("spo2", "saturacion"))
         values = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", numeric)]
         expected = 2 if metric == "blood_pressure" else 1
+        if not values:
+            return reply("needs_clarification", _missing_value_message(metric))
         if len(values) != expected or re.search(r"-\s*\d", s):
             return reply(
                 "needs_clarification",
@@ -924,6 +1007,8 @@ def interpret(text, entries=None):
             unit = "h"
         elif metric == "muscle_mass" and re.search(r"\b(kg|kilos?|kilogramos?)\b", s):
             unit = "kg"
+        if not unit and _ASSUME_UNITS.get():
+            unit = SINGLE_UNIT.get(metric)
         if not unit:
             return reply(
                 "needs_clarification",
@@ -940,6 +1025,8 @@ def interpret(text, entries=None):
         origin_final = suggested_origin or DEFAULT_INSTRUMENTS.get(metric, "Instrumento declarado")
         cand["suggested_origin"] = origin_final
         cand["suggested_measured_at"] = suggested_iso or datetime.now().strftime("%Y-%m-%dT%H:%M")
+        cand["explicit_origin"] = bool(suggested_origin)
+        cand["explicit_time"] = _explicit_time(suggested_iso, suggested_str)
         msg = build_confirmation_message(cand, origin_final, suggested_str)
         return reply("needs_confirmation", msg, cand)
     if re.search(r"\d", s):

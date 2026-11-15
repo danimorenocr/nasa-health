@@ -93,3 +93,27 @@ def test_rewards_and_weekly_mission_are_idempotent(tmp_path):
         assert shield["unlocked"] is True
         xp_after_shield = rewards["xp"]
         assert client.get("/api/v1/rewards", headers=headers).json()["xp"] == xp_after_shield
+
+
+def test_synthetic_check_ins_fill_7_days_and_never_overwrite_real_ones(tmp_path):
+    app = create_app(tmp_path / "synthetic.sqlite3", clock=lambda: NOW, enable_rate_limit=False)
+    with TestClient(app) as client:
+        owner = register(client, "Sofía", "sofi@example.com")
+        real = client.put(
+            f"/api/v1/mind/check-ins/{TODAY}", headers=owner,
+            json={"mood_score": 5, "mood_word": "Tranquilo", "energy": 5},
+        )
+        assert real.status_code == 200
+        loaded = client.post("/api/v1/mind/synthetic", headers=owner)
+        assert loaded.status_code == 201 and loaded.json()["check_ins"] == 6
+        rows = client.get("/api/v1/mind/check-ins?days=7", headers=owner).json()["check_ins"]
+        assert len(rows) == 7
+        today = next(r for r in rows if r["date"] == TODAY)
+        assert today["mood_score"] == 5 and not today.get("synthetic")
+        fake = [r for r in rows if r.get("synthetic")]
+        assert len(fake) == 6 and all(
+            all(r.get(k) for k in ("stress", "isolation", "concentration", "energy", "sleep_difficulty")) for r in fake
+        )
+        again = client.post("/api/v1/mind/synthetic", headers=owner)
+        assert again.status_code == 201
+        assert len(client.get("/api/v1/mind/check-ins?days=7", headers=owner).json()["check_ins"]) == 7

@@ -599,6 +599,64 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         db.commit()
         return {"status": "created" if created else "updated", "check_in": serialize_check_in(row)}
 
+    # Check-ins ficticios de 7 días (hoy y los 6 anteriores) con todas las escalas.
+    SYNTHETIC_MIND = [  # del más antiguo al de hoy: ánimo, palabra, estrés, aislamiento, concentración, energía, dificultad para dormir
+        (3, "Tranquilo", 2, 2, 4, 3, 2),
+        (2, "Cansado", 3, 3, 3, 2, 4),
+        (3, "Tenso", 4, 3, 3, 3, 3),
+        (4, "Con energía", 2, 2, 4, 4, 2),
+        (3, "Nostálgico", 3, 4, 3, 3, 3),
+        (4, "Tranquilo", 2, 2, 4, 4, 2),
+        (4, "Con energía", 2, 1, 5, 4, 1),
+    ]
+
+    @app.post("/api/v1/mind/synthetic", status_code=201)
+    def synthetic_mind(auth: Auth):
+        """Carga 7 días de check-ins ficticios, marcados con `synthetic`.
+
+        Reemplaza solo los sintéticos anteriores y nunca pisa un check-in real: si ya
+        hay uno real en una fecha, esa fecha se deja como está.
+        """
+        db, session = auth
+        owner_id = require_account(session)
+        existing = list(db.scalars(select(DailyCheckIn).where(DailyCheckIn.owner_id == owner_id)))
+        for row in existing:
+            if (row.scales or {}).get("synthetic"):
+                db.delete(row)
+        db.flush()
+        real_dates = {row.entry_date for row in existing if not (row.scales or {}).get("synthetic")}
+        now = clock()
+        today = datetime.fromtimestamp(now, timezone.utc).date()
+        created = 0
+        for index, (mood, word, stress, isolation, concentration, energy, sleep_difficulty) in enumerate(SYNTHETIC_MIND):
+            day = today - timedelta(days=len(SYNTHETIC_MIND) - 1 - index)
+            if day.isoformat() in real_dates:
+                continue
+            # Hoy se guarda "ahora" (para la gráfica de 24 h); los demás días, a las 20:00.
+            stamp = now if day == today else datetime(day.year, day.month, day.day, 20, 0, tzinfo=timezone.utc).timestamp()
+            db.add(
+                DailyCheckIn(
+                    id=str(uuid4()),
+                    owner_id=owner_id,
+                    entry_date=day.isoformat(),
+                    mood_score=mood,
+                    mood_word=word,
+                    scales={
+                        "stress": stress,
+                        "isolation": isolation,
+                        "concentration": concentration,
+                        "energy": energy,
+                        "sleep_difficulty": sleep_difficulty,
+                        "synthetic": True,
+                    },
+                    created=stamp,
+                    updated=stamp,
+                )
+            )
+            created += 1
+        db.commit()
+        return {"status": "created", "check_ins": created, "skipped_real_days": len(real_dates & {(today - timedelta(days=i)).isoformat() for i in range(7)}), "synthetic": True}
+
     @app.get("/api/v1/mind/journal")
     def list_journal(auth: Auth):
         db, session = auth
@@ -811,7 +869,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             result = await interpret_with_llm(payload.text, entries=entries, lang=payload.lang)
 
         if not result:
-            result = interpret(payload.text, entries=entries)
+            result = interpret(payload.text, entries=entries, assume_units=payload.assume_units)
 
         session.pending = result.get("candidate")
         session.pending_id = str(uuid4()) if session.pending else None
@@ -833,6 +891,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             session.pending_id, session.pending, session.pending_expires = None, None, None
             db.commit()
             raise HTTPException(409, "La propuesta venció. Envía de nuevo el texto y revísalo.")
+        origin_text = payload.origin.strip() or "Dato declarado"
         measured = payload.measured_at.timestamp() if payload.measured_at else clock()
         if measured > clock():
             raise HTTPException(422, "La fecha de medición no puede estar en el futuro.")
@@ -851,7 +910,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
                     recorded_at=iso(clock()),
                     measured_at=iso(measured),
                     candidate=m,
-                    origin=payload.origin,
+                    origin=origin_text,
                     context=payload.context,
                     recommendation=assess(m, payload.context),
                 )
@@ -874,7 +933,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             recorded_at=iso(clock()),
             measured_at=iso(measured),
             candidate=session.pending,
-            origin=payload.origin,
+            origin=origin_text,
             context=payload.context,
             recommendation=assess(session.pending, payload.context),
         )

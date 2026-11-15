@@ -14,7 +14,6 @@ def test_flow_and_isolation(client):
     pending = propose(client, a)
     assert client.get("/api/v1/entries", headers=a).json()["count"] == 0
     assert confirm(client, b, pending).status_code == 409
-    assert confirm(client, a, pending, origin="").status_code == 422
     r = confirm(client, a, pending)
     assert r.status_code == 201
     assert r.json()["entry"]["candidate"]["values"] == [82]
