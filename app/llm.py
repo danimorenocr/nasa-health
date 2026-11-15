@@ -31,6 +31,7 @@ DEFAULT_MISSION_INSTRUMENTS = {
     "oxygen_saturation": "Pulsioxímetro de cabina",
     "glucose": "Glucómetro capilar telemétrico",
     "sleep": "Sensor de biotelemetría de sueño",
+    "muscle_mass": "Báscula de composición corporal",
 }
 
 NASA_EVIDENCE_CONTEXT = {
@@ -110,7 +111,7 @@ def is_llm_configured() -> bool:
     return get_llm_config() is not None
 
 
-_VALID_METRICS = {"heart_rate", "temperature", "blood_pressure", "oxygen_saturation", "glucose", "sleep"}
+_VALID_METRICS = {"heart_rate", "temperature", "blood_pressure", "oxygen_saturation", "glucose", "sleep", "muscle_mass"}
 
 
 def _clean_measurement(item: Any, text: str, now_iso: str) -> dict[str, Any] | None:
@@ -180,7 +181,8 @@ async def interpret_with_llm(
         "- blood_pressure: dos valores [sistólica, diastólica] en mmHg.\n"
         "- oxygen_saturation: porcentaje de 0 a 100 en % (SpO2, saturación).\n"
         "- glucose: en mg/dL o mmol/L.\n"
-        "- sleep: horas dormidas en h.\n\n"
+        "- sleep: horas dormidas en h.\n"
+        "- muscle_mass: peso de músculos en kg.\n\n"
         f"BASE TEMPORAL EXACTA DEL SISTEMA:\n"
         f"- Fecha y hora actual del sistema (HOY): {today_str} ({now_human}).\n"
         f"- AYER corresponde exactamente a: {yesterday_str}.\n"
@@ -201,6 +203,7 @@ async def interpret_with_llm(
         "   - Para oxygen_saturation: 'Pulsioxímetro de cabina'\n"
         "   - Para glucose: 'Glucómetro capilar telemétrico'\n"
         "   - Para sleep: 'Sensor de biotelemetría de sueño'\n"
+        "   - Para muscle_mass: 'Báscula de composición corporal'\n"
         "¡NUNCA dejes 'suggested_origin' en null o vacío si identificaste una métrica!\n\n"
         "REGLAS DE SEGURIDAD Y CONFIRMACIÓN:\n"
         "- Si el texto reporta posibles emergencias críticas (dolor en el pecho, falta de aire súbita, sangrado profuso), responde con status: 'safety_notice'.\n"
@@ -298,6 +301,7 @@ METRIC_DISPLAY_NAMES = {
     "oxygen_saturation": "saturación de oxígeno",
     "glucose": "glucosa",
     "sleep": "horas de sueño",
+    "muscle_mass": "masa muscular",
 }
 
 

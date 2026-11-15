@@ -120,7 +120,7 @@ class ConfirmInput(StrictModel):
 
 class MeasurementCandidate(BaseModel):
     kind: Literal["measurement"]
-    metric: Literal["heart_rate", "temperature", "blood_pressure", "oxygen_saturation", "glucose", "sleep"]
+    metric: Literal["heart_rate", "temperature", "blood_pressure", "oxygen_saturation", "glucose", "sleep", "muscle_mass"]
     values: list[float]
     unit: str
     original_text: str
@@ -175,6 +175,7 @@ class EntryOut(BaseModel):
     candidate: Candidate
     origin: str
     context: str
+    recommendation: dict | None = None
     confirmed_by_user: Literal[True]
     clinical_assessment: Literal["not_performed"]
 

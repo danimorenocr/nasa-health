@@ -18,6 +18,7 @@ METRIC_LABELS = {
     "oxygen_saturation": "saturación de oxígeno",
     "glucose": "glucosa",
     "sleep": "sueño",
+    "muscle_mass": "músculos",
 }
 
 METRIC_EXAMPLES = {
@@ -27,6 +28,7 @@ METRIC_EXAMPLES = {
     "oxygen_saturation": "Saturación 98 %",
     "glucose": "Glucosa 95 mg/dL",
     "sleep": "Dormí 7 horas",
+    "muscle_mass": "Músculos 32 kg",
 }
 
 
@@ -677,6 +679,7 @@ DESCRIPTORS = [
     ("oxygen_saturation", r"saturacion|spo2"),
     ("glucose", r"glucosa|glicemia"),
     ("sleep", r"dormi|sueno|horas de dormir"),
+    ("muscle_mass", r"musculo|masa muscular"),
 ]
 
 
@@ -717,6 +720,8 @@ def parse_single_measurement_clause(s_clause, original_clause):
         unit = "mg/dL" if mg else "mmol/L" if mmol else None
     elif metric == "sleep" and re.search(r"\b(h|horas?)\b", s_clause):
         unit = "h"
+    elif metric == "muscle_mass" and re.search(r"\b(kg|kilos?|kilogramos?)\b", s_clause):
+        unit = "kg"
 
     if not unit:
         return {"error": "missing_unit", "metric": metric}
@@ -850,7 +855,7 @@ def interpret(text, entries=None):
                 return reply(
                     "needs_clarification",
                     f"Falta una unidad compatible para {label_err}. Especifica lpm, "
-                    "°C/°F, mmHg, %, mg/dL, mmol/L o horas según el indicador. No asumo unidades.",
+                    "°C/°F, mmHg, %, mg/dL, mmol/L, kg u horas según el indicador. No asumo unidades.",
                 )
             if bad_val_errors:
                 return reply(
@@ -917,11 +922,13 @@ def interpret(text, entries=None):
             unit = "mg/dL" if mg else "mmol/L" if mmol else None
         elif metric == "sleep" and re.search(r"\b(h|horas?)\b", s):
             unit = "h"
+        elif metric == "muscle_mass" and re.search(r"\b(kg|kilos?|kilogramos?)\b", s):
+            unit = "kg"
         if not unit:
             return reply(
                 "needs_clarification",
                 "Falta una unidad compatible o no es clara. Especifica lpm, "
-                "°C/°F, mmHg, %, mg/dL, mmol/L o horas según el indicador. No asumo unidades.",
+                "°C/°F, mmHg, %, mg/dL, mmol/L, kg u horas según el indicador. No asumo unidades.",
             )
         cand = {
             "kind": "measurement",

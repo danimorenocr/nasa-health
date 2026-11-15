@@ -12,6 +12,7 @@ from sqlalchemy import (
     create_engine,
     event,
 )
+from .recommend import assess
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -51,6 +52,7 @@ class Entry(Base):
     candidate: Mapped[dict] = mapped_column(JSON)
     origin: Mapped[str] = mapped_column(String(120))
     context: Mapped[str] = mapped_column(String(500))
+    recommendation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     __table_args__ = (Index("ix_entry_session_measured", "session_hash", "measured_at"),)
 
 
@@ -137,6 +139,9 @@ def database(db_path):
         if "revoked" not in columns:
             conn.exec_driver_sql("ALTER TABLE local_session ADD COLUMN revoked BOOLEAN NOT NULL DEFAULT 0")
         conn.exec_driver_sql("UPDATE local_session SET created = updated WHERE created IS NULL")
+        entry_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(entry)")}
+        if "recommendation" not in entry_columns:
+            conn.exec_driver_sql("ALTER TABLE entry ADD COLUMN recommendation JSON")
         account_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(account)")}
         if "profile_image_url" not in account_columns:
             conn.exec_driver_sql("ALTER TABLE account ADD COLUMN profile_image_url VARCHAR(2048)")
@@ -146,6 +151,7 @@ def database(db_path):
 
 
 def serialize_entry(entry):
+    recommendation = entry.recommendation or assess(entry.candidate, entry.context)
     return {
         "id": entry.id,
         "recorded_at": entry.recorded_at,
@@ -153,6 +159,7 @@ def serialize_entry(entry):
         "candidate": entry.candidate,
         "origin": entry.origin,
         "context": entry.context,
+        "recommendation": recommendation,
         "confirmed_by_user": True,
         "clinical_assessment": "not_performed",
     }

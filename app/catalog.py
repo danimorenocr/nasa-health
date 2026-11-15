@@ -81,4 +81,5 @@ INDICATORS = [
     {"code": "oxygen_saturation", "name_es": "Saturación", "units": ["%"], "example": "Saturación 97 %"},
     {"code": "glucose", "name_es": "Glucosa", "units": ["mg/dL", "mmol/L"], "example": "Glucosa 90 mg/dL"},
     {"code": "sleep", "name_es": "Sueño declarado", "units": ["h"], "example": "Dormí 6 horas"},
+    {"code": "muscle_mass", "name_es": "Músculos", "units": ["kg"], "example": "Músculos 32 kg"},
 ]

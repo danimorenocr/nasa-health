@@ -38,6 +38,7 @@ from .db import (
 from .engine import URGENT_MESSAGE, interpret
 from .guidance import build_guidance
 from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_configured
+from .recommend import assess
 from .research import ResearchUnavailable, import_study
 from .schemas import (
     AuthOut,
@@ -852,6 +853,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
                     candidate=m,
                     origin=payload.origin,
                     context=payload.context,
+                    recommendation=assess(m, payload.context),
                 )
                 db.add(e)
                 entries_added.append(e)
@@ -874,6 +876,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             candidate=session.pending,
             origin=payload.origin,
             context=payload.context,
+            recommendation=assess(session.pending, payload.context),
         )
         db.add(entry)
         session.pending_id, session.pending, session.pending_expires = None, None, None
@@ -1058,6 +1061,60 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             now=now,
         )
         return res
+
+    # Serie ficticia de 3 días para todos los indicadores: una lectura cada 8 h
+    # (9 por indicador, de la más antigua a la más reciente) y el sueño de 3 noches.
+    SYNTHETIC_3_DAYS = {
+        "heart_rate": ("lpm", [[74], [88], [70], [76], [92], [68], [72], [84], [71]], "En reposo"),
+        "blood_pressure": ("mmHg", [[118, 76], [124, 80], [116, 74], [120, 78], [128, 84], [117, 75], [121, 79], [126, 82], [119, 77]], "Sentado, en reposo"),
+        "oxygen_saturation": ("%", [[97], [98], [97], [96], [98], [97], [98], [97], [98]], "En reposo"),
+        "temperature": ("°C", [[36.6], [36.9], [36.5], [36.8], [37.2], [36.6], [36.7], [37.0], [36.6]], "Medición oral"),
+        "glucose": ("mg/dL", [[92], [128], [88], [96], [135], [90], [94], [148], [91]], "Historial de prueba"),
+        "muscle_mass": ("kg", [[32.1], [32.2], [32.1], [32.3], [32.2], [32.4], [32.3], [32.4], [32.5]], "Báscula de composición corporal"),
+    }
+
+    @app.post("/api/v1/synthetic", status_code=201)
+    def synthetic_all(auth: Auth):
+        """Carga datos ficticios de 3 días de todos los indicadores, claramente marcados.
+
+        Reemplaza solo los sintéticos anteriores de esta sesión; nunca toca registros
+        confirmados por la persona.
+        """
+        db, session = auth
+        db.execute(
+            delete(Entry).where(entry_condition(session), Entry.origin == SYNTHETIC_ORIGIN)
+        )
+        now_ts = clock()
+        note = "Historial de prueba, no es de una persona real"
+        rows = []
+        for metric, (unit, series, context) in SYNTHETIC_3_DAYS.items():
+            for i, values in enumerate(series):
+                rows.append((metric, unit, values, now_ts - (len(series) - 1 - i) * 8 * 3600, context))
+        for i, hours in enumerate([7.5, 6.5, 6.0]):  # de hace 3 noches a la última
+            rows.append(("sleep", "h", [hours], now_ts - (2 - i) * 24 * 3600 - 2 * 3600, "Sueño declarado"))
+        for metric, unit, values, ts, context in rows:
+            candidate = {
+                "kind": "measurement",
+                "metric": metric,
+                "values": values,
+                "unit": unit,
+                "original_text": f"{metric} {'/'.join(f'{v:g}' for v in values)} {unit} (sintético)",
+            }
+            full_context = f"{context}. {note}"
+            db.add(
+                Entry(
+                    id=str(uuid4()),
+                    session_hash=session.token_hash,
+                    recorded_at=iso(now_ts),
+                    measured_at=iso(ts),
+                    candidate=candidate,
+                    origin=SYNTHETIC_ORIGIN,
+                    context=full_context,
+                    recommendation=assess(candidate, full_context),
+                )
+            )
+        db.commit()
+        return {"status": "created", "days": 3, "entries": len(rows), "origin": SYNTHETIC_ORIGIN, "synthetic": True}
 
     @app.post("/api/v1/synthetic/{metric}", status_code=201)
     def synthetic_metric(auth: Auth, metric: str):

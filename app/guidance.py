@@ -354,6 +354,23 @@ INDICATOR_GUIDANCE = [
         "not_shown": "Las horas declaradas no miden la calidad del sueño ni detectan trastornos como la apnea.",
         "source_ids": ["nasa-sleep-countermeasures", "nasa-sleep-risk"],
     },
+    {
+        "code": "muscle_mass",
+        "name": "Músculos",
+        "what": "Peso de músculos en kg declarado por la persona, por ejemplo desde una báscula de composición corporal.",
+        "instruments": [
+            "Báscula de composición corporal o dato declarado. La disponibilidad de equipos a bordo depende de la configuración de la misión; en este prototipo es solo un dato declarado.",
+        ],
+        "purpose": "Seguir la tendencia de la masa muscular, que requiere estímulo constante en microgravedad.",
+        "spaceflight_links": [
+            "NASA y JAXA incluyen ejercicio de resistencia entre las contramedidas para limitar la pérdida de masa muscular en vuelo.",
+        ],
+        "attention": "Consulta no urgente con el equipo médico: pérdida rápida de peso muscular, debilidad que interfiere con las tareas o dolor muscular intenso que no cede. Sin umbrales propios: la interpretación de cifras corresponde al personal médico.",
+        "attention_source_ids": ["nasa-health-care-faq", "jaxa-medical-operations"],
+        "actions": ["exercise-countermeasures"],
+        "not_shown": "El peso en kg no mide la fuerza, la calidad del músculo ni la causa de un cambio.",
+        "source_ids": ["nasa-astronaut-exercise", "jaxa-medical-operations"],
+    },
 ]
 
 # Lo que NO es orientación de bienestar: requiere evaluación del equipo médico.
