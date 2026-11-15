@@ -8,7 +8,7 @@ médico de la misión. Las fechas `reviewed_at` marcan cuándo se revisó cada
 fuente; una fuente puede cambiar o quedar obsoleta después.
 """
 
-GUIDANCE_VERSION = "1.0.0"
+GUIDANCE_VERSION = "1.1.0"
 GUIDANCE_REVIEWED_AT = "2026-11-14"
 
 GUIDANCE_SOURCES = [
@@ -67,6 +67,69 @@ GUIDANCE_SOURCES = [
         "url": "https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_2",
         "reviewed_at": "2026-11-14",
         "scope": "Estándar a nivel de programa (diseño, habitabilidad y salud ambiental). No define triage ni umbrales personales.",
+    },
+    {
+        "id": "medlineplus-chest-pain",
+        "title": "MedlinePlus (NIH): dolor de pecho",
+        "url": "https://medlineplus.gov/ency/article/003079.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Referencia sanitaria general para la Tierra: el dolor de pecho opresivo o repentino es emergencia (llamar al número de emergencias). No es protocolo de misión.",
+    },
+    {
+        "id": "medlineplus-breathing-difficulty",
+        "title": "MedlinePlus (NIH): dificultad para respirar",
+        "url": "https://medlineplus.gov/ency/article/003075.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Referencia sanitaria general: dificultad respiratoria súbita o que impide hablar es emergencia. No es protocolo de misión.",
+    },
+    {
+        "id": "medlineplus-fainting",
+        "title": "MedlinePlus (NIH): desmayo",
+        "url": "https://medlineplus.gov/ency/article/003092.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Emergencia si la persona no recupera el estado de alerta en un par de minutos; consulta médica aunque no sea urgente tras un primer desmayo o si se repite. Referencia terrestre.",
+    },
+    {
+        "id": "medlineplus-confusion",
+        "title": "MedlinePlus (NIH): confusión",
+        "url": "https://medlineplus.gov/ency/article/003205.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "La confusión súbita o sin motivo es emergencia según MedlinePlus. Referencia terrestre general.",
+    },
+    {
+        "id": "medlineplus-blue-skin",
+        "title": "MedlinePlus (NIH): coloración azulada de la piel",
+        "url": "https://medlineplus.gov/ency/article/003215.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "La cianosis indica falta de oxígeno en sangre según MedlinePlus. Referencia terrestre general.",
+    },
+    {
+        "id": "medlineplus-fever",
+        "title": "MedlinePlus (NIH): fiebre",
+        "url": "https://medlineplus.gov/ency/article/003090.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Cuándo contactar al médico o a emergencias por fiebre en adultos. Referencia general para la Tierra, no protocolo de misión.",
+    },
+    {
+        "id": "medlineplus-low-blood-sugar",
+        "title": "MedlinePlus (NIH): azúcar baja",
+        "url": "https://medlineplus.gov/ency/article/000386.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Síntomas de azúcar baja y cuándo buscar ayuda inmediata (persona menos alerta o confundida). Referencia terrestre general.",
+    },
+    {
+        "id": "medlineplus-high-blood-sugar",
+        "title": "MedlinePlus (NIH): azúcar alta",
+        "url": "https://medlineplus.gov/ency/article/001214.htm",
+        "reviewed_at": "2026-11-14",
+        "scope": "Síntomas de azúcar alta: sed excesiva, orina frecuente, fatiga, visión borrosa. Referencia terrestre general.",
+    },
+    {
+        "id": "nhlbi-insomnia",
+        "title": "NHLBI (NIH): insomnio",
+        "url": "https://www.nhlbi.nih.gov/health/insomnia",
+        "reviewed_at": "2026-11-14",
+        "scope": "Define el insomnio crónico (3 o más noches por semana durante más de 3 meses) y opciones que un médico puede recomendar. Referencia terrestre general.",
     },
 ]
 
@@ -195,7 +258,8 @@ INDICATOR_GUIDANCE = [
             "NASA documenta adaptaciones cardiovasculares del vuelo espacial y riesgo de intolerancia ortostática al volver a la gravedad (relación general en astronautas, no causalidad individual).",
             "El consumo máximo de oxígeno (VO2max) y la capacidad aeróbica disminuyen en vuelos largos según estudios citados por NASA.",
         ],
-        "attention": "Busca atención del equipo médico (o del cirujano de vuelo, en una misión) si hay dolor de pecho, falta de aire, desmayo o palpitaciones intensas, o si las lecturas se alejan del patrón personal de forma repetida y sin explicación. Astra no define umbrales: el criterio clínico pertenece al protocolo de la misión.",
+        "attention": "Emergencia inmediata (en la Tierra: número de emergencias; en misión: avisa de inmediato al cirujano de vuelo): dolor de pecho opresivo o repentino, falta de aire súbita, confusión repentina o desmayo sin recuperación en un par de minutos, según MedlinePlus. Consulta no urgente: un primer desmayo con recuperación rápida o desmayos repetidos (MedlinePlus recomienda valoración médica aunque no sea urgente), palpitaciones intensas o lecturas repetidas alejadas de tu patrón personal sin explicación. Astra no define umbrales: el criterio clínico pertenece al protocolo de la misión.",
+        "attention_source_ids": ["medlineplus-chest-pain", "medlineplus-breathing-difficulty", "medlineplus-fainting", "medlineplus-confusion"],
         "actions": ["exercise-countermeasures", "physical-activity-earth"],
         "not_shown": "No detecta arritmias ni problemas del corazón, y no sustituye un electrocardiograma interpretado por personal médico.",
         "source_ids": ["jaxa-medical-operations", "nasa-astronaut-exercise", "nasa-cv-risk", "nasa-orthostatic-intolerance"],
@@ -213,7 +277,8 @@ INDICATOR_GUIDANCE = [
             "Los entornos cerrados u hostiles son uno de los cinco peligros de NASA: incluyen vigilancia de microbios y de las respuestas inmunes de la tripulación.",
             "Antes del lanzamiento la tripulación pasa una cuarentena sanitaria para reducir el riesgo de llevar infecciones a bordo (JAXA).",
         ],
-        "attention": "Fiebre persistente o acompañada de otros síntomas (escalofríos, debilidad intensa, confusión) amerita avisar al equipo médico. La app no define qué temperatura es fiebre: ese criterio es clínico.",
+        "attention": "Emergencia inmediata: fiebre con confusión o dificultad para despertar a la persona (MedlinePlus: llamar al número de emergencias). Consulta pronta al equipo médico: fiebre que dura más de 48 a 72 horas o se mantiene en 39,4 °C o más en un adulto, referencia general de MedlinePlus para la Tierra (no es protocolo de misión). En misión, reporta cualquier fiebre persistente o acompañada de otros síntomas (escalofríos, debilidad intensa): en un entorno cerrado importa para toda la tripulación. La app no define qué temperatura es fiebre: ese criterio es clínico.",
+        "attention_source_ids": ["medlineplus-fever", "medlineplus-confusion"],
         "actions": ["social-connection"],
         "not_shown": "No identifica la causa de una temperatura alta ni distingue infección de otros motivos.",
         "source_ids": ["jaxa-medical-operations", "nasa-hrp-hazards", "nasa-body-temperature-rfi"],
@@ -230,7 +295,8 @@ INDICATOR_GUIDANCE = [
         "spaceflight_links": [
             "NASA estudia las adaptaciones cardiovasculares del vuelo y la intolerancia ortostática al regreso (mareo al ponerse de pie), relación general documentada en astronautas.",
         ],
-        "attention": "Mareo o desmayo al ponerse de pie, dolor de pecho o lecturas repetidas muy alejadas del patrón personal ameritan aviso al equipo médico. Sin umbrales propios: la interpretación de cifras corresponde al personal médico.",
+        "attention": "Emergencia inmediata: dolor de pecho opresivo o falta de aire súbita (MedlinePlus: llamar al número de emergencias). Consulta no urgente: mareo o desmayo breve al ponerte de pie (MedlinePlus recomienda valoración médica tras un primer desmayo o si se repite, aunque no sea urgente) y lecturas repetidas muy alejadas del patrón personal. Sin umbrales propios: la interpretación de cifras corresponde al personal médico.",
+        "attention_source_ids": ["medlineplus-chest-pain", "medlineplus-breathing-difficulty", "medlineplus-fainting"],
         "actions": ["exercise-countermeasures", "physical-activity-earth"],
         "not_shown": "No diagnostica hipertensión ni hipotensión; una sola lectura aislada tampoco lo hace un médico.",
         "source_ids": ["jaxa-medical-operations", "nasa-cv-risk", "nasa-orthostatic-intolerance"],
@@ -247,7 +313,8 @@ INDICATOR_GUIDANCE = [
             "NASA documenta el riesgo de salud y desempeño reducidos por hipoxia, ligado a la atmósfera de cabina y a las caminatas espaciales.",
             "El aire de la ISS lo vigila el programa espacial (muestreo y sistemas de soporte vital), no la persona con su pulsioxímetro.",
         ],
-        "attention": "Falta de aire, confusión o coloración azulada en labios son motivo de atención inmediata. Una saturación repetidamente distinta a lo habitual amerita aviso al equipo médico. Si varias personas a bordo presentan síntomas a la vez, sospechar del ambiente y avisar de inmediato.",
+        "attention": "Emergencia inmediata: falta de aire súbita o que impide hablar, confusión repentina o coloración azulada de labios o piel (cianosis, señal de falta de oxígeno en sangre según MedlinePlus): en la Tierra llama al número de emergencias y en misión avisa de inmediato al equipo médico. Si varias personas a bordo presentan síntomas a la vez, sospecha del ambiente y avisa de inmediato. Consulta no urgente: valores repetidamente distintos a lo habitual sin síntomas.",
+        "attention_source_ids": ["medlineplus-breathing-difficulty", "medlineplus-confusion", "medlineplus-blue-skin"],
         "actions": ["sleep-environment"],
         "not_shown": "No mide el CO2 ni la calidad del aire de la cabina, y no identifica la causa de una saturación baja.",
         "source_ids": ["nasa-hypoxia-risk", "jaxa-medical-operations"],
@@ -264,7 +331,8 @@ INDICATOR_GUIDANCE = [
             "Un estudio NASA de 2002 planteó cambios en secreción y sensibilidad a la insulina durante el vuelo espacial: es una hipótesis de investigación, no una guía clínica vigente.",
             "La nutrición en misión se supervisa de cerca (registro diario de ingesta y análisis de muestras), lo que contextualiza la glucosa.",
         ],
-        "attention": "Síntomas como temblor, sudoración, confusión o mucha sed y orina frecuente ameritan aviso al equipo médico, igual que valores repetidamente fuera de lo habitual para esa persona. Sin umbrales propios.",
+        "attention": "Emergencia inmediata: confusión o disminución del estado de alerta en una persona con diabetes o con azúcar baja (MedlinePlus: buscar ayuda médica de inmediato). Consulta no urgente: síntomas como temblor o sudoración (azúcar baja) o mucha sed y orina frecuente (azúcar alta), listados por MedlinePlus, o valores repetidamente fuera de lo habitual para esa persona. Sin umbrales propios: el criterio es clínico.",
+        "attention_source_ids": ["medlineplus-low-blood-sugar", "medlineplus-high-blood-sugar", "medlineplus-confusion"],
         "actions": ["nutrition-tracking", "physical-activity-earth"],
         "not_shown": "No interpreta diabetes ni ajusta medicación; el contexto (ayunas, comida, ejercicio) cambia por completo la lectura.",
         "source_ids": ["jaxa-medical-operations", "nasa-health-care-faq", "nasa-spaceflight-insulin-2002"],
@@ -280,7 +348,8 @@ INDICATOR_GUIDANCE = [
         "spaceflight_links": [
             "La ISS orbita cada 90 minutos: 16 amaneceres al día desajustan el ritmo circadiano, riesgo documentado por NASA junto con la pérdida de sueño y la sobrecarga de trabajo.",
         ],
-        "attention": "Insomnio persistente o somnolencia que interfiere con las tareas amerita hablar con el equipo médico. Los medicamentos para dormir son la última opción documentada por NASA y se prueban en tierra bajo supervisión de cirujanos de vuelo antes de usarse en misión.",
+        "attention": "Consulta no urgente con el equipo médico: insomnio persistente (el NHLBI lo describe como 3 o más noches por semana durante más de 3 meses) o somnolencia que interfiere con las tareas; el NHLBI documenta que un médico puede recomendar higiene de sueño, terapia cognitivo-conductual o medicamentos. En misión, los medicamentos para dormir son la última opción documentada por NASA y se prueban en tierra bajo supervisión de cirujanos de vuelo. Las fuentes consultadas no definen una emergencia propia del sueño; la confusión súbita es emergencia según MedlinePlus.",
+        "attention_source_ids": ["nhlbi-insomnia", "nasa-sleep-countermeasures", "medlineplus-confusion"],
         "actions": ["sleep-schedule", "light-management", "sleep-environment", "sleep-cbt"],
         "not_shown": "Las horas declaradas no miden la calidad del sueño ni detectan trastornos como la apnea.",
         "source_ids": ["nasa-sleep-countermeasures", "nasa-sleep-risk"],
@@ -365,6 +434,9 @@ def build_guidance(extra_sources):
         missing = [s for s in item["source_ids"] if s not in known]
         if missing:
             raise ValueError(f"Fuentes desconocidas en {item['code']}: {missing}")
+        missing_att = [s for s in item["attention_source_ids"] if s not in known]
+        if missing_att:
+            raise ValueError(f"Fuentes de atención desconocidas en {item['code']}: {missing_att}")
         missing_actions = [a for a in item["actions"] if a not in measures]
         if missing_actions:
             raise ValueError(f"Acciones desconocidas en {item['code']}: {missing_actions}")
@@ -372,7 +444,7 @@ def build_guidance(extra_sources):
     return {
         "version": GUIDANCE_VERSION,
         "reviewed_at": GUIDANCE_REVIEWED_AT,
-        "intro": "Orientación de bienestar curada por el equipo con fuentes públicas de NASA, JAXA y OMS. Es educativa y general: no es consejo médico validado, no interpreta tus lecturas y no reemplaza al equipo médico de la misión.",
+        "intro": "Orientación de bienestar curada por el equipo con fuentes públicas de NASA, JAXA, OMS y referencias sanitarias del NIH (MedlinePlus, NHLBI). Es educativa y general: no es consejo médico validado, no interpreta tus lecturas y no reemplaza al equipo médico de la misión.",
         "challenge_questions": CHALLENGE_QUESTIONS,
         "hazards": HAZARDS,
         "measures": GENERAL_MEASURES,
