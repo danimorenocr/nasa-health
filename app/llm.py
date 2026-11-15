@@ -192,7 +192,7 @@ async def interpret_with_llm(
         "Eres ASTRA (Autonomous Space Telemetry & Record Assistant), el sistema médico inteligente de telemetría a bordo de una misión espacial.\n"
         "Tu misión es interpretar la transcripción o mensaje del astronauta y estructurar con precisión las mediciones de salud.\n\n"
         "MÉTRICAS ADMITIDAS (debes usar exactamente uno de estos identificadores):\n"
-        "- heart_rate: valores numéricos en lpm (latidos por minuto, pulso, pulsaciones).\n"
+        "- heart_rate: valores numéricos en bpm (latidos por minuto, pulso, pulsaciones).\n"
         "- temperature: valores en °C o °F (si dice grados o centígrados, normaliza a °C).\n"
         "- blood_pressure: dos valores [sistólica, diastólica] en mmHg.\n"
         "- oxygen_saturation: porcentaje de 0 a 100 en % (SpO2, saturación).\n"
@@ -239,12 +239,12 @@ async def interpret_with_llm(
         "RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO con este formato exacto:\n"
         "{\n"
         '  "status": "needs_confirmation",\n'
-        '  "message": "🛰️ ¡Datos recibidos y verificados por el sistema! He identificado tu lectura de frecuencia cardíaca: 115 lpm (origen: Oxímetro, medición: 2026-11-13 a las 11:00 AM). Por protocolo de seguridad de la misión espacial, por favor verifica que las cifras en el formulario coincidan exactamente antes de confirmar tu registro en SQLite local.",\n'
+        '  "message": "🛰️ ¡Datos recibidos y verificados por el sistema! He identificado tu lectura de frecuencia cardíaca: 115 bpm (origen: Oxímetro, medición: 2026-11-13 a las 11:00 AM). Por protocolo de seguridad de la misión espacial, por favor verifica que las cifras en el formulario coincidan exactamente antes de confirmar tu registro en SQLite local.",\n'
         '  "candidate": {\n'
         '    "kind": "measurement",\n'
         '    "metric": "heart_rate",\n'
         '    "values": [115.0],\n'
-        '    "unit": "lpm",\n'
+        '    "unit": "bpm",\n'
         '    "original_text": "...",\n'
         '    "suggested_origin": "Oxímetro",\n'
         '    "suggested_measured_at": "2026-11-13T11:00",\n'
@@ -313,7 +313,7 @@ async def interpret_with_llm(
                     parsed["recorded"] = False
                     parsed["llm_used"] = True
                     return parsed
-    except (httpx.HTTPError, ValueError, OSError, json.JSONDecodeError, KeyError) as ex:
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError, OSError, json.JSONDecodeError, KeyError) as ex:
         logger.warning("Llamada al LLM falló (%s). Empleando motor determinista local.", ex)
 
     return None
@@ -433,12 +433,12 @@ def generate_deterministic_analysis_recommendation(
     if metric == "heart_rate":
         if (max_val and max_val >= 100) or (avg_val and avg_val >= 95):
             return (
-                f"Tus registros reflejan pulsaciones elevadas (hasta {max_val or avg_val} lpm). La NASA señala que la redistribución cefálica "
+                f"Tus registros reflejan pulsaciones elevadas (hasta {max_val or avg_val} bpm). La NASA señala que la redistribución cefálica "
                 "de fluidos y la menor volemia en ingravidez aumentan la respuesta taquicárdica para sostener el gasto cardíaco. "
                 "Sugerimos reposo en módulo, ejercicios de respiración lenta e ingesta de líquidos con sales minerales."
             )
         return (
-            f"Tu frecuencia cardíaca promedio ({avg_val or 'estable'} lpm) muestra un comportamiento adecuado. Para mitigar "
+            f"Tu frecuencia cardíaca promedio ({avg_val or 'estable'} bpm) muestra un comportamiento adecuado. Para mitigar "
             "el desacondicionamiento cardiovascular propio de las misiones espaciales según los protocolos de la NASA, "
             "continúa cumpliendo con tu pauta diaria de entrenamiento resistivo y aeróbico."
         )

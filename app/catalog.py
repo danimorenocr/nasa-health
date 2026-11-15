@@ -65,7 +65,7 @@ LIMITATIONS = [
     "SQLite local sin cifrado: no introducir salud real. La sesión caduca tras 30 días sin acceso y borra sus registros (configurable).",
 ]
 INDICATORS = [
-    {"code": "heart_rate", "name_es": "Pulso", "units": ["lpm"], "example": "Pulso 82 lpm"},
+    {"code": "heart_rate", "name_es": "Pulso", "units": ["bpm"], "example": "Pulso 82 bpm"},
     {
         "code": "temperature",
         "name_es": "Temperatura",

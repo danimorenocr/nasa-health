@@ -145,6 +145,18 @@ def database(db_path):
         account_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(account)")}
         if "profile_image_url" not in account_columns:
             conn.exec_driver_sql("ALTER TABLE account ADD COLUMN profile_image_url VARCHAR(2048)")
+    # El pulso ahora se registra en bpm: se actualizan los registros guardados con "lpm".
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE entry SET candidate = json_set(candidate, '$.unit', 'bpm') "
+            "WHERE json_extract(candidate, '$.metric') = 'heart_rate' AND json_extract(candidate, '$.unit') = 'lpm'"
+        )
+        entry_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(entry)")}
+        if "recommendation" in entry_cols:
+            conn.exec_driver_sql(
+                "UPDATE entry SET recommendation = replace(replace(recommendation, ' lpm', ' bpm'), ' lpm', ' bpm') "
+                "WHERE recommendation LIKE '% lpm%'"
+            )
     # Best effort on platforms with POSIX permissions. Still not encryption.
     path.chmod(0o600)
     return engine, sessionmaker(bind=engine, expire_on_commit=False)

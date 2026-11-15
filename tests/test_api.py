@@ -103,7 +103,7 @@ def test_pending_invalidated_and_discarded(client):
 def test_validation(client):
     assert client.get("/api/v1/entries").status_code == 401
     h = auth(client)
-    for data in [{"text": ""}, {"text": "x" * 2001}, {"text": "Pulso 82 lpm", "extra": True}]:
+    for data in [{"text": ""}, {"text": "x" * 2001}, {"text": "Pulso 82 bpm", "extra": True}]:
         assert client.post("/api/v1/messages", headers=h, json=data).status_code == 422
 
 
@@ -197,7 +197,7 @@ def test_api_memory_flow(client):
     assert "No tienes registros de pulso" in r_empty.json()["message"]
 
     # 2. Registrar un pulso
-    p = propose(client, h, "Pulso 82 lpm")
+    p = propose(client, h, "Pulso 82 bpm")
     r_conf = confirm(client, h, p, origin="Pulsómetro de prueba", context="en reposo")
     assert r_conf.status_code == 201
 
@@ -206,7 +206,7 @@ def test_api_memory_flow(client):
     assert r_pulse.status_code == 200
     assert r_pulse.json()["status"] == "information"
     assert r_pulse.json()["pending_id"] is None
-    assert "82 lpm" in r_pulse.json()["message"]
+    assert "82 bpm" in r_pulse.json()["message"]
     assert "Pulsómetro de prueba" in r_pulse.json()["message"]
 
     # 4. Consultar resumen de registros en memoria

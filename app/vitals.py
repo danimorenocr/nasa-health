@@ -47,7 +47,7 @@ VITAL_SPECS = {
     "heart_rate": {
         "code": "heart_rate",
         "name": "Pulso",
-        "units": {"lpm": (0, 300)},
+        "units": {"bpm": (0, 300), "lpm": (0, 300)},
         "value_names": None,
         "groups": [REST_GROUP, EXERCISE_GROUP],
         "education": {
@@ -382,9 +382,9 @@ def analyze_vital(entries, as_of, days, tz_offset_minutes, spec):
 SYNTHETIC_VITALS = {
     "heart_rate": {
         "values": [[72], [74], [71], [75], [73], [78], [80]],
-        "unit": "lpm",
+        "unit": "bpm",
         "context": "En reposo. Historial de prueba, no es de una persona real",
-        "text": "Pulso {v} lpm en reposo (sintético)",
+        "text": "Pulso {v} bpm en reposo (sintético)",
     },
     "blood_pressure": {
         "values": [[118, 76], [120, 78], [119, 77], [122, 80], [121, 79], [124, 82], [125, 83]],

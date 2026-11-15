@@ -38,6 +38,7 @@ from .db import (
 )
 from .engine import URGENT_MESSAGE, interpret
 from .guidance import build_guidance
+from .knowledge import answer_question
 from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_configured
 from .recommend import assess
 from .research import ResearchUnavailable, import_study
@@ -904,6 +905,12 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
         )
         result = None
         local = interpret(payload.text, entries=entries, assume_units=payload.assume_units)
+        # Preguntas sobre límites y rangos: se responden con la información de la app, sin LLM.
+        answer = answer_question(payload.text, payload.lang)
+        if answer is not None:
+            session.pending, session.pending_id, session.pending_expires = None, None, None
+            db.commit()
+            return {**answer, "pending_id": None, "pending_expires_at": None, "recorded": False}
         if is_llm_configured():
             result = await interpret_with_llm(payload.text, entries=entries, lang=payload.lang)
             if result is not None:
@@ -1171,7 +1178,7 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
     # Serie ficticia de 3 días para todos los indicadores: una lectura cada 8 h
     # (9 por indicador, de la más antigua a la más reciente) y el sueño de 3 noches.
     SYNTHETIC_3_DAYS = {
-        "heart_rate": ("lpm", [[74], [88], [70], [76], [92], [68], [72], [84], [71]], "En reposo"),
+        "heart_rate": ("bpm", [[74], [88], [70], [76], [92], [68], [72], [84], [71]], "En reposo"),
         "blood_pressure": ("mmHg", [[118, 76], [124, 80], [116, 74], [120, 78], [128, 84], [117, 75], [121, 79], [126, 82], [119, 77]], "Sentado, en reposo"),
         "oxygen_saturation": ("%", [[97], [98], [97], [96], [98], [97], [98], [97], [98]], "En reposo"),
         "temperature": ("°C", [[36.6], [36.9], [36.5], [36.8], [37.2], [36.6], [36.7], [37.0], [36.6]], "Medición oral"),

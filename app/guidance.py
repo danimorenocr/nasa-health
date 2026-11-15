@@ -248,7 +248,7 @@ INDICATOR_GUIDANCE = [
     {
         "code": "heart_rate",
         "name": "Pulso",
-        "what": "Latidos por minuto (lpm), declarados con su contexto (en reposo o tras ejercicio).",
+        "what": "Latidos por minuto (bpm), declarados con su contexto (en reposo o tras ejercicio).",
         "instruments": [
             "En la ISS: electrocardiógrafo y monitor de presión/ECG del sistema médico (CHeCS); la bicicleta CEVIS muestra la frecuencia cardíaca durante el ejercicio.",
             "En la Tierra: pulsómetro, reloj con sensor o medición manual.",

@@ -14,7 +14,7 @@ class StrictModel(BaseModel):
 class MessageInput(StrictModel):
     text: str = Field(min_length=1, max_length=2000)
     lang: Literal["es", "en"] = "es"
-    assume_units: bool = True  # sin unidad dicha se usa la de por defecto (lpm, mmHg, %, °C, mg/dL, h, kg)
+    assume_units: bool = True  # sin unidad dicha se usa la de por defecto (bpm, mmHg, %, °C, mg/dL, h, kg)
 
 
 class LoginInput(StrictModel):
@@ -173,6 +173,8 @@ class MessageOut(BaseModel):
     recommendations: list[str] | str | None = None
     llm_used: bool = False
     skipped: list[str] = []  # indicadores dichos que no se pudieron entender
+    skipped_codes: list[str] = []
+    ask_metric: str | None = None  # indicador al que le falta el valor (para volver a pedirlo)
 
 
 class EntryOut(BaseModel):

@@ -74,7 +74,7 @@ def test_duplicates_conflicts_naps_invalid(tmp_path):
 def test_units_and_other_metrics_ignored(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
-        pid = propose(c, h, "Pulso 82 lpm")
+        pid = propose(c, h, "Pulso 82 bpm")
         assert confirm(c, h, pid).status_code == 201
         assert analysis(c, h)["personal_calculation"]["nights_recorded"] == 0
 

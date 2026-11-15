@@ -16,7 +16,7 @@ async def test_interpret_with_llm_mock(monkeypatch):
         '  "kind": "measurement", '
         '  "metric": "heart_rate", '
         '  "values": [115], '
-        '  "unit": "lpm", '
+        '  "unit": "bpm", '
         '  "suggested_origin": "Oxímetro", '
         '  "suggested_measured_at": "2026-11-13T11:00"'
         '}, '
@@ -77,7 +77,7 @@ def test_deterministic_analysis_recommendations():
     assert "convección" in rec_fever or "ventilación" in rec_fever
 
     # 2. Pulso elevado
-    personal_hr = {"message": "Promedio 98 lpm (máximo 115 lpm)."}
+    personal_hr = {"message": "Promedio 98 bpm (máximo 115 bpm)."}
     rec_hr = generate_deterministic_analysis_recommendation("heart_rate", personal_hr, edu)
     assert "pulsaciones elevadas" in rec_hr or "taquicardia" in rec_hr
     assert "volemia" in rec_hr or "líquidos" in rec_hr
@@ -146,7 +146,7 @@ MULTI_LLM_RESULT = {
     "status": "needs_confirmation",
     "message": "Lecturas identificadas.",
     "candidates": [
-        {"kind": "measurement", "metric": "heart_rate", "values": [32.0], "unit": "lpm",
+        {"kind": "measurement", "metric": "heart_rate", "values": [32.0], "unit": "bpm",
          "original_text": "32 BPM", "suggested_origin": "Monitor", "suggested_measured_at": "2026-11-14T21:36"},
         {"kind": "measurement", "metric": "temperature", "values": [37.2], "unit": "°C",
          "original_text": "37.2 grados", "suggested_origin": "Termómetro", "suggested_measured_at": "2026-11-14T21:36"},

@@ -6,7 +6,7 @@ from app.engine import interpret
 @pytest.mark.parametrize(
     "text,metric,values,unit",
     [
-        ("Pulso 82 lpm", "heart_rate", [82], "lpm"),
+        ("Pulso 82 bpm", "heart_rate", [82], "bpm"),
         ("Temperatura 37,2 °C", "temperature", [37.2], "°C"),
         ("Temperatura 98.6 °F", "temperature", [98.6], "°F"),
         ("Presión 120/80 mmHg", "blood_pressure", [120, 80], "mmHg"),
@@ -31,12 +31,12 @@ def test_parse(text, metric, values, unit):
 @pytest.mark.parametrize(
     "text",
     [
-        "82 lpm",
+        "82 bpm",
         "Presión 120 mmHg",
-        "Pulso 82 y 95 lpm",
+        "Pulso 82 y 95 bpm",
         "Temperatura 37 °C o °F",
         "Glucosa 5 mg/dL o mmol/L",
-        "Pulso -5 lpm",
+        "Pulso -5 bpm",
     ],
 )
 def test_clarify(text):
@@ -102,8 +102,8 @@ def test_memory_queries_with_entries():
                 "kind": "measurement",
                 "metric": "heart_rate",
                 "values": [82.0],
-                "unit": "lpm",
-                "original_text": "Pulso 82 lpm",
+                "unit": "bpm",
+                "original_text": "Pulso 82 bpm",
             },
             "origin": "Pulsómetro de prueba",
             "context": "en reposo",
@@ -138,7 +138,7 @@ def test_memory_queries_with_entries():
     # Consulta de pulso
     r_pulse = interpret("¿Cuál fue mi último pulso?", entries=sample_entries)
     assert r_pulse["status"] == "information"
-    assert "82 lpm" in r_pulse["message"]
+    assert "82 bpm" in r_pulse["message"]
     assert "Pulsómetro de prueba" in r_pulse["message"]
     assert "en reposo" in r_pulse["message"]
 
@@ -150,7 +150,7 @@ def test_memory_queries_with_entries():
     # Consulta del registro más reciente
     r_latest = interpret("¿Qué fue lo último que registré?", entries=sample_entries)
     assert r_latest["status"] == "information"
-    assert "pulso: 82 lpm" in r_latest["message"]
+    assert "pulso: 82 bpm" in r_latest["message"]
 
     # Resumen de registros
     r_summary = interpret("¿Qué registros tengo?", entries=sample_entries)
@@ -167,7 +167,7 @@ def test_memory_queries_with_entries():
     # Multi-indicador
     r_multi = interpret("¿Cuál fue mi último pulso y temperatura?", entries=sample_entries)
     assert r_multi["status"] == "information"
-    assert "pulso: 82 lpm" in r_multi["message"]
+    assert "pulso: 82 bpm" in r_multi["message"]
     assert "temperatura: 37,2 °C" in r_multi["message"]
 
     # Si hay urgencia, la seguridad prima sobre la consulta
@@ -177,23 +177,23 @@ def test_memory_queries_with_entries():
 
 def test_spoken_numbers_and_units():
     # Spoken numbers in Spanish
-    r_pulse = interpret("Pulso ochenta y dos lpm")
+    r_pulse = interpret("Pulso ochenta y dos bpm")
     assert r_pulse["status"] == "needs_confirmation"
     assert r_pulse["candidate"]["metric"] == "heart_rate"
     assert r_pulse["candidate"]["values"] == [82]
-    assert r_pulse["candidate"]["unit"] == "lpm"
+    assert r_pulse["candidate"]["unit"] == "bpm"
 
     # Spoken units: pulsaiones por minuto, pulsaciones por minuto, latidos por minuto
     r_pulsaiones = interpret("Pulso ochenta y dos pulsaiones por minuto")
     assert r_pulsaiones["status"] == "needs_confirmation"
     assert r_pulsaiones["candidate"]["metric"] == "heart_rate"
     assert r_pulsaiones["candidate"]["values"] == [82]
-    assert r_pulsaiones["candidate"]["unit"] == "lpm"
+    assert r_pulsaiones["candidate"]["unit"] == "bpm"
 
     r_pulsaciones = interpret("Pulso 75 pulsaciones por minuto")
     assert r_pulsaciones["status"] == "needs_confirmation"
     assert r_pulsaciones["candidate"]["values"] == [75]
-    assert r_pulsaciones["candidate"]["unit"] == "lpm"
+    assert r_pulsaciones["candidate"]["unit"] == "bpm"
 
     # Spoken decimals
     r_temp = interpret("Temperatura treinta y siete coma dos grados centígrados")
@@ -234,7 +234,7 @@ def test_batch_voice_measurements():
     assert len(measurements) == 2
     assert measurements[0]["metric"] == "heart_rate"
     assert measurements[0]["values"] == [80]
-    assert measurements[0]["unit"] == "lpm"
+    assert measurements[0]["unit"] == "bpm"
     assert measurements[1]["metric"] == "temperature"
     assert measurements[1]["values"] == [36.6]
     assert measurements[1]["unit"] == "°C"
@@ -267,7 +267,7 @@ def test_temperature_spoken_units():
     assert len(r_batch["candidate"]["measurements"]) == 2
     assert r_batch["candidate"]["measurements"][0]["metric"] == "heart_rate"
     assert r_batch["candidate"]["measurements"][0]["values"] == [80]
-    assert r_batch["candidate"]["measurements"][0]["unit"] == "lpm"
+    assert r_batch["candidate"]["measurements"][0]["unit"] == "bpm"
     assert r_batch["candidate"]["measurements"][1]["metric"] == "temperature"
     assert r_batch["candidate"]["measurements"][1]["values"] == [37.0]
     assert r_batch["candidate"]["measurements"][1]["unit"] == "°C"
@@ -288,13 +288,13 @@ def test_natural_phrasing_latidos():
     assert r["status"] == "needs_confirmation"
     assert r["candidate"]["metric"] == "heart_rate"
     assert r["candidate"]["values"] == [100.0]
-    assert r["candidate"]["unit"] == "lpm"
+    assert r["candidate"]["unit"] == "bpm"
 
     r2 = interpret("mi ritmo cardiaco es de 75 latidos por minuto")
     assert r2["status"] == "needs_confirmation"
     assert r2["candidate"]["metric"] == "heart_rate"
     assert r2["candidate"]["values"] == [75.0]
-    assert r2["candidate"]["unit"] == "lpm"
+    assert r2["candidate"]["unit"] == "bpm"
 
 
 def test_contextual_origin_and_date():
@@ -303,7 +303,7 @@ def test_contextual_origin_and_date():
     assert r["status"] == "needs_confirmation"
     assert r["candidate"]["metric"] == "heart_rate"
     assert r["candidate"]["values"] == [115.0]
-    assert r["candidate"]["unit"] == "lpm"
+    assert r["candidate"]["unit"] == "bpm"
     assert r["candidate"]["suggested_origin"] == "Oxímetro"
     assert r["candidate"]["suggested_measured_at"] == "2026-11-13T11:00"
     assert "Datos recibidos y verificados" in r["message"]
@@ -340,7 +340,7 @@ def test_relative_dates_and_default_instruments():
 
     # 4. Fecha relativa: "ayer a las 3 pm"
     yesterday = now - timedelta(days=1)
-    r_ayer = interpret("Ayer me medí el pulso a las 3 pm y tenía 85 lpm")
+    r_ayer = interpret("Ayer me medí el pulso a las 3 pm y tenía 85 bpm")
     assert r_ayer["status"] == "needs_confirmation"
     assert r_ayer["candidate"]["values"] == [85.0]
     assert r_ayer["candidate"]["suggested_origin"] == "Pulsioxímetro / Monitor cardíaco de cabina"

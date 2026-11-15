@@ -65,5 +65,5 @@ def test_sin_umbrales_clinicos_inventados(client):
     data = client.get("/api/v1/guidance").json()
     joined = " ".join(i["attention"] for i in data["indicators"]).lower()
     # Las señales de aviso no fijan cifras de corte clínicas.
-    for forbidden in ("lpm", "mmhg", "mg/dl", "normal", "anormal"):
+    for forbidden in ("lpm", "bpm", "mmhg", "mg/dl", "normal", "anormal"):
         assert forbidden not in joined, forbidden

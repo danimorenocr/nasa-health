@@ -31,9 +31,9 @@ def test_heart_rate_rest_vs_exercise_never_mixed(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
         for i, v in enumerate([72, 74, 71, 75, 73, 78, 80]):
-            log(c, h, f"Pulso {v} lpm", 6 - i, context="En reposo")
-        log(c, h, "Pulso 140 lpm", 2, context="Después de ejercicio")
-        log(c, h, "Pulso 90 lpm", 1)  # sin contexto
+            log(c, h, f"Pulso {v} bpm", 6 - i, context="En reposo")
+        log(c, h, "Pulso 140 bpm", 2, context="Después de ejercicio")
+        log(c, h, "Pulso 90 bpm", 1)  # sin contexto
         a = analysis(c, h, "heart_rate")
         p = a["personal_calculation"]
         rest = next(s for s in p["series"] if s["context_group"] == "rest")
@@ -41,7 +41,7 @@ def test_heart_rate_rest_vs_exercise_never_mixed(tmp_path):
         other = next(s for s in p["series"] if s["context_group"] == "other")
         assert rest["records"] == 7 and rest["stats"]["mean"] == [74.71]
         assert rest["stats"]["change_last_minus_first"] == [8.0]
-        assert "8 lpm más" in rest["summary"]
+        assert "8 bpm más" in rest["summary"]
         assert exercise["records"] == 1 and exercise["stats"]["change_last_minus_first"] is None
         assert "no describo un cambio" in exercise["summary"]
         assert other["records"] == 1
@@ -54,10 +54,10 @@ def test_heart_rate_rest_vs_exercise_never_mixed(tmp_path):
 def test_context_negation_or_ambiguity_never_lands_in_a_named_group(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
-        log(c, h, "Pulso 95 lpm", 3, context="No estaba en reposo")
-        log(c, h, "Pulso 96 lpm", 2, context="En reposo después de ejercicio")
-        log(c, h, "Pulso 70 lpm", 1, context="No hice ejercicio, en reposo")
-        log(c, h, "Pulso 71 lpm", 0, context="En reposo")
+        log(c, h, "Pulso 95 bpm", 3, context="No estaba en reposo")
+        log(c, h, "Pulso 96 bpm", 2, context="En reposo después de ejercicio")
+        log(c, h, "Pulso 70 bpm", 1, context="No hice ejercicio, en reposo")
+        log(c, h, "Pulso 71 bpm", 0, context="En reposo")
         p = analysis(c, h, "heart_rate")["personal_calculation"]
         rest = next(s for s in p["series"] if s["context_group"] == "rest")
         other = next(s for s in p["series"] if s["context_group"] == "other")
@@ -70,10 +70,10 @@ def test_context_negation_or_ambiguity_never_lands_in_a_named_group(tmp_path):
 def test_same_day_readings_are_normal_and_kept(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
-        log(c, h, "Pulso 72 lpm", 2, context="En reposo")
-        log(c, h, "Pulso 75 lpm", 2, context="En reposo")  # mismo día, valor distinto: normal
-        log(c, h, "Pulso 75 lpm", 2, context="En reposo")  # repetición idéntica: también se conserva
-        log(c, h, "Pulso 78 lpm", 1, context="En reposo")
+        log(c, h, "Pulso 72 bpm", 2, context="En reposo")
+        log(c, h, "Pulso 75 bpm", 2, context="En reposo")  # mismo día, valor distinto: normal
+        log(c, h, "Pulso 75 bpm", 2, context="En reposo")  # repetición idéntica: también se conserva
+        log(c, h, "Pulso 78 bpm", 1, context="En reposo")
         p = analysis(c, h, "heart_rate")["personal_calculation"]
         rest = next(s for s in p["series"] if s["context_group"] == "rest")
         assert rest["records"] == 4 and rest["dates"] == 2
@@ -123,8 +123,8 @@ def test_saturation_over_100_is_a_scale_limit_and_kept(tmp_path):
 def test_prototype_limits_are_not_called_impossible(tmp_path):
     with make(tmp_path) as c:
         h = auth(c)
-        log(c, h, "Pulso 72 lpm", 2, context="En reposo")
-        log(c, h, "Pulso 350 lpm", 1, context="En reposo")  # fuera del límite del prototipo
+        log(c, h, "Pulso 72 bpm", 2, context="En reposo")
+        log(c, h, "Pulso 350 bpm", 1, context="En reposo")  # fuera del límite del prototipo
         log(c, h, "Temperatura 50 °C", 1)
         a = analysis(c, h, "heart_rate")
         kept = a["personal_calculation"]["not_processed"][0]
@@ -195,7 +195,7 @@ def test_synthetic_each_metric_marked_and_scoped(tmp_path):
         )
         assert rest["records"] == 7
         # Recargar sintéticos de un indicador no borra los de otro ni los confirmados.
-        log(c, h, "Pulso 81 lpm", 8, context="En reposo")  # fuera de la ventana de 7 días
+        log(c, h, "Pulso 81 bpm", 8, context="En reposo")  # fuera de la ventana de 7 días
         assert c.post("/api/v1/synthetic/heart_rate", headers=h).status_code == 201
         a = analysis(c, h, "heart_rate")
         rest = next(

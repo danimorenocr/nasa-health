@@ -23,7 +23,7 @@ METRIC_LABELS = {
 }
 
 METRIC_EXAMPLES = {
-    "heart_rate": "Pulso 82 lpm",
+    "heart_rate": "Pulso 82 bpm",
     "temperature": "Temperatura 37,2 °C",
     "blood_pressure": "Presión 120/80 mmHg",
     "oxygen_saturation": "Saturación 98 %",
@@ -177,7 +177,7 @@ def handle_memory_query(s, text, entries, matches):
             return reply(
                 "information",
                 "Aún no tienes registros confirmados en esta sesión. Puedes registrar una medición con su unidad "
-                "(por ejemplo: «Pulso 82 lpm») o describir un síntoma y confirmarlo.",
+                "(por ejemplo: «Pulso 82 bpm») o describir un síntoma y confirmarlo.",
             )
         latest = entries[0]
         cand = _get_field(latest, "candidate") or {}
@@ -211,7 +211,7 @@ def handle_memory_query(s, text, entries, matches):
             return reply(
                 "information",
                 "Aún no tienes registros confirmados en esta sesión. Para guardar uno en la memoria local, "
-                "escribe una lectura (por ejemplo: «Pulso 82 lpm») o síntoma y confírmalo.",
+                "escribe una lectura (por ejemplo: «Pulso 82 bpm») o síntoma y confírmalo.",
             )
         counts = defaultdict(int)
         for e in entries:
@@ -375,7 +375,7 @@ def normalize_spoken_units(text):
     # Heart rate aliases (explicitly recognizes 'pulsaiones por minuto')
     s = re.sub(
         r"\b(pulsaiones por minuto|pulsaciones por minuto|latidos por minuto)\b",
-        "lpm",
+        "bpm",
         s,
         flags=re.IGNORECASE,
     )
@@ -479,6 +479,7 @@ def extract_origin_info(text):
             candidate_orig = gen_match.group(1).strip()
             if candidate_orig.lower() not in {
                 "lpm",
+                "bpm",
                 "mmhg",
                 "celsius",
                 "temperatura",
@@ -698,7 +699,7 @@ DESCRIPTORS = [
 # Indicadores con una sola unidad posible. Solo se asume al dictar por voz (assume_units).
 _ASSUME_UNITS = contextvars.ContextVar("assume_units", default=True)
 SINGLE_UNIT = {
-    "heart_rate": "lpm",
+    "heart_rate": "bpm",
     "blood_pressure": "mmHg",
     "oxygen_saturation": "%",
     "sleep": "h",
@@ -728,7 +729,7 @@ def _missing_value_message(metric):
 
 
 def split_before_new_indicators(text):
-    """Separa lecturas dichas de corrido ("pulso 80 lpm temperatura 37 grados saturación 97 por ciento").
+    """Separa lecturas dichas de corrido ("pulso 80 bpm temperatura 37 grados saturación 97 por ciento").
 
     Inserta un ';' cada vez que cambia el indicador mencionado.
     """
@@ -780,7 +781,7 @@ def parse_single_measurement_clause(s_clause, original_clause):
 
     unit = None
     if metric == "heart_rate" and re.search(r"\b(lpm|bpm)\b|latidos por minuto", s_clause):
-        unit = "lpm"
+        unit = "bpm"
     elif metric == "temperature":
         unit = "°C" if celsius else "°F" if fahrenheit else None
     elif metric == "blood_pressure" and re.search(r"\bmmhg\b", s_clause):
@@ -939,7 +940,9 @@ def _interpret(text, entries=None):
             no_value_errors = [p for p in active_results if p.get("error") == "missing_value"]
             valid_measurements = [p for p in active_results if p.get("kind") == "measurement"]
             if no_value_errors and not valid_measurements:
-                return reply("needs_clarification", _missing_value_message(no_value_errors[0]["metric"]))
+                asked = reply("needs_clarification", _missing_value_message(no_value_errors[0]["metric"]))
+                asked["ask_metric"] = no_value_errors[0]["metric"]
+                return asked
             if conflict_errors and not valid_measurements:
                 return reply("needs_clarification", "Hay dos unidades. Envía una sola lectura con una única unidad.")
             if missing_errors and not valid_measurements:
@@ -947,7 +950,7 @@ def _interpret(text, entries=None):
                 label_err = METRIC_LABELS.get(metric_err, metric_err)
                 return reply(
                     "needs_clarification",
-                    f"Falta una unidad compatible para {label_err}. Especifica lpm, "
+                    f"Falta una unidad compatible para {label_err}. Especifica bpm, "
                     "°C/°F, mmHg, %, mg/dL, mmol/L, kg u horas según el indicador. No asumo unidades.",
                 )
             if bad_val_errors and not valid_measurements:
@@ -962,6 +965,7 @@ def _interpret(text, entries=None):
                 for p in active_results
                 if p.get("error") and p.get("metric")
             ]
+            skipped_codes = [p["metric"] for p in active_results if p.get("error") and p.get("metric")]
             skipped_note = f" No entendí: {', '.join(skipped)}; no se guardó eso." if skipped else ""
             valid_measurements = [p for p in active_results if p.get("kind") == "measurement"]
             if len(valid_measurements) > 1:
@@ -978,6 +982,7 @@ def _interpret(text, entries=None):
                 msg = build_batch_confirmation_message(valid_measurements, batch_origin, suggested_str) + skipped_note
                 result = reply("needs_confirmation", msg, cand)
                 result["skipped"] = skipped
+                result["skipped_codes"] = skipped_codes
                 return result
             if len(valid_measurements) == 1:
                 cand = valid_measurements[0]
@@ -990,6 +995,7 @@ def _interpret(text, entries=None):
                 msg = build_confirmation_message(cand, origin_final, suggested_str) + skipped_note
                 result = reply("needs_confirmation", msg, cand)
                 result["skipped"] = skipped
+                result["skipped_codes"] = skipped_codes
                 return result
 
         return reply(
@@ -1001,7 +1007,9 @@ def _interpret(text, entries=None):
         values = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", numeric)]
         expected = 2 if metric == "blood_pressure" else 1
         if not values:
-            return reply("needs_clarification", _missing_value_message(metric))
+            asked = reply("needs_clarification", _missing_value_message(metric))
+            asked["ask_metric"] = metric
+            return asked
         if len(values) != expected or re.search(r"-\s*\d", s):
             return reply(
                 "needs_clarification",
@@ -1020,7 +1028,7 @@ def _interpret(text, entries=None):
             )
         unit = None
         if metric == "heart_rate" and re.search(r"\b(lpm|bpm)\b|latidos por minuto", s):
-            unit = "lpm"
+            unit = "bpm"
         elif metric == "temperature":
             unit = "°C" if celsius else "°F" if fahrenheit else None
         elif metric == "blood_pressure" and re.search(r"\bmmhg\b", s):
@@ -1038,7 +1046,7 @@ def _interpret(text, entries=None):
         if not unit:
             return reply(
                 "needs_clarification",
-                "Falta una unidad compatible o no es clara. Especifica lpm, "
+                "Falta una unidad compatible o no es clara. Especifica bpm, "
                 "°C/°F, mmHg, %, mg/dL, mmol/L, kg u horas según el indicador. No asumo unidades.",
             )
         cand = {

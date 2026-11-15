@@ -15,7 +15,7 @@ def auth(client):
     return {"Authorization": "Bearer " + client.post("/api/v1/sessions").json()["token"]}
 
 
-def propose(client, headers, text="Pulso 82 lpm"):
+def propose(client, headers, text="Pulso 82 bpm"):
     r = client.post("/api/v1/messages", headers=headers, json={"text": text})
     assert r.status_code == 200
     return r.json()["pending_id"]

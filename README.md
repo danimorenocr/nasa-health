@@ -19,7 +19,7 @@ Para desarrollo también sirve `pip install -e '.[dev]'`. La instalación inicia
 
 ## Prueba rápida
 
-1. Envía `Pulso 82 lpm`. Aún no aparece ningún registro.
+1. Envía `Pulso 82 bpm`. Aún no aparece ningún registro.
 2. Revisa el texto, valor y unidad. Introduce `Pulsómetro ficticio` como origen y confirma.
 3. Pregunta `¿Cuál fue mi último pulso?` o `¿Qué registros tengo?`: el asistente recuerda tus mediciones en SQLite local y te responde por texto y por voz.
 4. Recarga la página: el registro sigue. Consulta su historial o descarga el JSON.
@@ -30,7 +30,7 @@ Para desarrollo también sirve `pip install -e '.[dev]'`. La instalación inicia
 
 - Conversación de voz continua en el front React (botón "Activar Astra"): palabra clave "Astra", saludo hablado, turnos de conversación con respuesta por voz y confirmación hablada (origen + sí/no) antes de guardar cualquier lectura. Solo escucha con la pestaña abierta y la pantalla activa; el reconocimiento usa el servicio de voz del navegador y puede necesitar internet. Detalle y límites en el README del front.
 - API `/api/v1`: sesiones aisladas, texto, confirmación, descarte, registros, memoria de consultas, historial por indicador/unidad, transcripción de audio grabado (`/api/v1/transcribe`), exportación y borrado.
-- Registro por voz y notas de audio: botón de grabación real con `MediaRecorder` para notas de audio, detención y cancelación, estados visibles (`grabando`, `transcribiendo`, `revisar`, `guardando`, `guardado`, `error`), dictado en vivo opcional por Web Speech API. Soporte de números hablados en español ("ochenta y dos", "treinta y siete coma dos", "ciento veinte sobre ochenta"), unidades habladas (incluyendo variantes como "pulsaiones por minuto" o "pulsaciones por minuto" -> `lpm`), y extracción de lotes de mediciones múltiples sin perder el paciente activo ni inventar datos ausentes.
+- Registro por voz y notas de audio: botón de grabación real con `MediaRecorder` para notas de audio, detención y cancelación, estados visibles (`grabando`, `transcribiendo`, `revisar`, `guardando`, `guardado`, `error`), dictado en vivo opcional por Web Speech API. Soporte de números hablados en español ("ochenta y dos", "treinta y siete coma dos", "ciento veinte sobre ochenta"), unidades habladas (incluyendo variantes como "pulsaiones por minuto" o "pulsaciones por minuto" -> `bpm`), y extracción de lotes de mediciones múltiples sin perder el paciente activo ni inventar datos ausentes.
 - Transcripción honesta en el servidor: si `OPENAI_API_KEY` o `GROQ_API_KEY` no están configuradas en el entorno, el servidor y la interfaz lo indican con total honestidad sin fingir transcripciones simuladas. El audio nunca se persiste crudo ni se loguea.
 - Lectura de recomendaciones reales devueltas por el sistema: tras confirmar y guardar un registro, la app recupera el análisis determinista oficial (`/api/v1/analysis/{metric}`) con cálculos de tendencia y fuente educativa NASA, y los lee en voz alta con controles para escuchar, detener y repetir, manteniendo el texto siempre visible.
 - Memoria local de registros: el asistente recuerda los datos confirmados en la sesión y responde preguntas sobre indicadores puntuales (ej. pulso, temperatura), último registro general, síntomas o resumen total.

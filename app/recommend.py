@@ -43,9 +43,9 @@ def _classify(metric, values, unit, context):
         if context and _EXERCISE.search(context):
             return None, None, None  # tras ejercicio no es comparable
         if v > 100:
-            return "high", "critical" if v > 130 else "attention", f"{v:g} lpm (referencia 50–100)"
+            return "high", "critical" if v > 130 else "attention", f"{v:g} bpm (referencia 50–100)"
         if v < 50:
-            return "low", "critical" if v < 40 else "attention", f"{v:g} lpm (referencia 50–100)"
+            return "low", "critical" if v < 40 else "attention", f"{v:g} bpm (referencia 50–100)"
     elif metric == "blood_pressure" and len(values) >= 2:
         s, d = values[0], values[1]
         if s >= 130 or d >= 85:
