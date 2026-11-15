@@ -24,6 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .catalog import INDICATORS, LIMITATIONS, SOURCES
 from .db import Account, Entry, LocalSession, ResearchCache, database, serialize_entry
 from .engine import URGENT_MESSAGE, interpret
+from .guidance import build_guidance
 from .llm import generate_analysis_recommendation, interpret_with_llm, is_llm_configured
 from .research import ResearchUnavailable, import_study
 from .schemas import (
@@ -279,6 +280,10 @@ def create_app(db_path=None, clock=time.time, enable_rate_limit=True):
             "emergency_protocol": {"available": False, "communication_connected": False},
             "supported_metrics": INDICATORS,
         }
+
+    @app.get("/api/v1/guidance")
+    def guidance():
+        return build_guidance(SOURCES)
 
     @app.get("/api/v1/indicators")
     def indicators():

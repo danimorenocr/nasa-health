@@ -7,6 +7,7 @@ Base local: `http://127.0.0.1:8000`. Contrato generado con esquemas de entrada y
 | GET | `/health` | No | Disponibilidad técnica y SQLite |
 | GET | `/api/v1/capabilities` | No | Capacidades/fuentes/límites reales |
 | GET | `/api/v1/indicators` | No | Indicadores, unidades y ejemplos |
+| GET | `/api/v1/guidance` | No | Orientación de bienestar con fuentes, límites y preguntas del reto |
 | POST | `/api/v1/sessions` | No | Token temporal aleatorio |
 | GET | `/api/v1/session` | Bearer | Comprobar/reanudar sesión |
 | POST | `/api/v1/messages` | Bearer | Interpretar texto y proponer revisión |

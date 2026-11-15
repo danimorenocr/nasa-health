@@ -178,7 +178,7 @@ def test_multi_candidates_become_batch_and_validate():
 def test_messages_endpoint_accepts_llm_multi_candidates(client, monkeypatch):
     from copy import deepcopy
 
-    import app.main as main
+    from app import main
     from tests.conftest import auth
 
     async def fake_llm(text, entries=None):
