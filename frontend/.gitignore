@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+.env
+.env.*
+npm-debug.log*
+.vite/
+.DS_Store
+Thumbs.db
+graphify-out/

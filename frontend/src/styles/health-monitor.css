@@ -1,0 +1,317 @@
+.health-monitor {
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-bottom: 20px;
+  container-type: inline-size;
+  overflow-x: hidden;
+}
+
+.hm-card-kicker {
+  color: #92dcfb;
+  font-size: .67rem;
+  font-weight: 700;
+  letter-spacing: .24em;
+}
+
+.hm-live-card {
+  min-height: 200px;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: center;
+  padding: 18px 20px;
+  width: 100%;
+}
+
+.hm-live-copy { align-self: stretch; }
+.hm-live-value { 
+  margin-top: 12px; 
+  font-size: 3.75rem; 
+  font-weight: 750; 
+  line-height: .94; 
+  letter-spacing: -.045em;
+  animation: ecgBpmPulse 0.68s ease-in-out infinite;
+  transform-origin: left center;
+}
+.hm-live-value small { margin-left: 5px; color: #78bcd7; font-size: 1rem; font-weight: 500; letter-spacing: 0; }
+.hm-live-copy p { margin: 11px 0 12px; color: #8bb0c6; font-size: .7rem; }
+.hm-history-chip { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; color: #f0d680; font-size: .62rem; border: 1px solid rgba(242, 203, 77, .58); border-radius: 20px; background: rgba(95, 78, 19, .1); }
+
+/* ─── Electrocardiograma en movimiento ─── */
+.hm-heartbeat { 
+  position: relative; 
+  height: 140px; 
+  display: flex; 
+  align-items: center; 
+  border-bottom: 1px solid rgba(87, 160, 199, .16); 
+  overflow: hidden; 
+  background: rgba(3, 16, 38, 0.45);
+}
+
+.hm-heartbeat__grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(49, 220, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(49, 220, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(49, 220, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(49, 220, 255, 0.08) 1px, transparent 1px);
+  background-size: 8px 8px, 8px 8px, 40px 40px, 40px 40px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hm-heartbeat__track {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  width: 300%;
+  min-width: 300%;
+  height: 100%;
+  flex: 0 0 auto;
+  animation: ecgTrackScroll 3.41s linear infinite;
+  will-change: transform;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes ecgTrackScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-33.333333%); }
+}
+
+.hm-heartbeat__svg { 
+  width: 33.333333%; 
+  min-width: 33.333333%;
+  height: 100%; 
+  flex-shrink: 0;
+  overflow: visible; 
+}
+
+.hm-heartbeat__line { 
+  fill: none; 
+  stroke: #4ae5ff; 
+  stroke-width: 2.6; 
+  vector-effect: non-scaling-stroke; 
+  filter: url(#hm-neon); 
+}
+
+.hm-heartbeat__line--glow { 
+  stroke: #31dcff; 
+  stroke-width: 9; 
+  opacity: .28; 
+}
+
+.hm-heartbeat__sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 130px;
+  background: linear-gradient(90deg, transparent 0%, rgba(49, 220, 255, 0.06) 50%, rgba(49, 220, 255, 0.25) 95%, #6befff 100%);
+  box-shadow: 2px 0 14px rgba(49, 220, 255, 0.85);
+  pointer-events: none;
+  z-index: 3;
+  animation: ecgSweepScan 3.41s linear infinite;
+}
+
+@keyframes ecgSweepScan {
+  0% { left: -140px; opacity: 0; }
+  5% { opacity: 1; }
+  95% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.hm-heartbeat__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: linear-gradient(90deg, rgba(6, 26, 56, 0.85) 0%, transparent 8%, transparent 92%, rgba(6, 26, 56, 0.85) 100%);
+}
+
+@keyframes ecgBpmPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px rgba(49, 220, 255, 0.3));
+  }
+  15% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 10px rgba(49, 220, 255, 0.8));
+    color: #ffffff;
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.02);
+    filter: drop-shadow(0 0 6px rgba(49, 220, 255, 0.6));
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+
+.hm-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 15px; }
+.hm-tabs button { min-height: 70px; display: flex; align-items: center; gap: 14px; padding: 0 20px; border: 1px solid rgba(61, 154, 214, .27); border-radius: 20px; color: #e4edf7; background: linear-gradient(145deg, rgba(11, 49, 91, .9), rgba(5, 29, 64, .83)); box-shadow: inset 0 1px rgba(255, 255, 255, .025), 0 12px 35px rgba(0, 5, 20, .14); cursor: pointer; font-size: .88rem; transition: 170ms ease; }
+.hm-tabs button svg { flex: 0 0 auto; color: #55ddff; }
+.hm-tabs button:hover { border-color: rgba(81, 210, 255, .5); transform: translateY(-1px); }
+.hm-tabs button.is-active { border-color: #5ce7ff; background: linear-gradient(135deg, rgba(14, 55, 101, .9), rgba(5, 28, 62, .9)); box-shadow: 0 0 22px rgba(42, 214, 255, .11), inset 0 0 24px rgba(26, 175, 232, .05); }
+
+.hm-detail-grid { display: grid; grid-template-columns: 260px minmax(340px, 1fr) 340px; align-items: start; gap: 16px; min-width: 0; width: 100%; }
+.hm-vitals-list { display: grid; grid-template-rows: repeat(4, 1fr); gap: 10px; height: 516px; min-width: 0; }
+.hm-charts-column { display: grid; grid-template-rows: repeat(2, 250px); gap: 16px; min-width: 0; }
+
+.hm-vital-card { min-height: 0; height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; }
+.hm-vital-card span { display: block; margin-bottom: 5px; color: #8db3ca; font-size: .7rem; }
+.hm-vital-card strong { display: flex; align-items: baseline; font-size: 1.75rem; letter-spacing: -.03em; white-space: nowrap; }
+.hm-vital-card small { margin-left: 4px; color: #8db3ca; font-size: .68rem; font-weight: 500; letter-spacing: 0; }
+.hm-vital-ring { --metric-progress: 90%; position: relative; flex: 0 0 auto; width: 66px; height: 66px; border-radius: 50%; background: conic-gradient(#57eba3 var(--metric-progress), rgba(58, 147, 169, .24) 0); box-shadow: 0 0 14px rgba(61, 236, 159, .35); }
+.hm-vital-ring::before { content: ''; position: absolute; inset: 8px; border-radius: inherit; background: #0a3156; box-shadow: inset 0 0 10px rgba(0, 5, 24, .8), 0 0 7px rgba(72, 242, 174, .65); }
+
+.hm-trend-card { min-height: 250px; padding: 20px; overflow: hidden; }
+.hm-chart { height: 190px; margin-top: 5px; }
+.hm-chart svg { width: 100%; height: 100%; overflow: visible; }
+.hm-chart__grid { stroke: rgba(98, 163, 200, .14); stroke-width: 1; }
+.hm-chart__tick { fill: #7699af; font-size: 9px; font-family: var(--font); }
+
+.hm-record-card {
+  display: flex;
+  height: 516px;
+  min-width: 0;
+  min-height: 516px;
+  padding: 18px 20px 16px;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.hm-record-copy { margin-bottom: 4px; font-size: 0.71rem; line-height: 1.42; color: #bad1df; }
+.hm-record-illustration {
+  display: block;
+  align-self: center;
+  width: auto;
+  max-width: 88%;
+  max-height: 175px;
+  min-height: 110px;
+  flex: 1 1 auto;
+  margin: 4px auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px rgba(37, 204, 247, .2));
+}
+.hm-record-card .hm-save-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.hm-record-hint {
+  margin: 6px 0 0;
+  font-size: 0.64rem;
+  line-height: 1.35;
+  color: #799fb4;
+  text-align: center;
+}
+.hm-record-fields { margin-top: 10px; }
+.hm-form-row { min-height: 51px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(96, 155, 190, .17); }
+.hm-form-row > span:first-child { color: #8cb1c8; font-size: .7rem; }
+.hm-select-wrap { position: relative; display: inline-flex; align-items: center; }
+.hm-select-wrap select { min-height: 35px; max-width: 160px; padding: 0 31px 0 14px; appearance: none; color: #cbeafb; border: 1px solid rgba(63, 190, 243, .4); border-radius: 22px; outline: 0; background: #0d426f; cursor: pointer; font: inherit; font-size: .67rem; }
+.hm-select-wrap svg { position: absolute; right: 11px; pointer-events: none; color: #8adbf7; }
+.hm-select-wrap option { color: white; background: #092e55; }
+
+.hm-intensity { margin: 15px 0 0; padding: 0; border: 0; }
+.hm-intensity legend, .hm-notes > span { margin-bottom: 8px; color: #8cb1c8; font-size: .7rem; }
+.hm-intensity > div { display: flex; gap: 8px; }
+.hm-intensity button { width: 44px; height: 44px; border: 1px solid rgba(59, 209, 255, .68); border-radius: 12px; color: #a9cadb; background: rgba(7, 39, 76, .6); cursor: pointer; }
+.hm-intensity button.is-selected { color: #062a45; background: linear-gradient(135deg, #1facdf, #54eaff); box-shadow: 0 0 18px rgba(50, 213, 255, .55); }
+.hm-notes { display: block; margin-top: 16px; }
+.hm-notes > span { display: block; }
+.hm-notes textarea { width: 100%; min-height: 82px; resize: vertical; padding: 13px; color: #e2eff8; border: 1px solid rgba(56, 151, 209, .38); border-radius: 12px; outline: 0; background: rgba(4, 29, 64, .54); font: inherit; font-size: .72rem; line-height: 1.45; }
+.hm-notes textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(49, 220, 255, .1); }
+.hm-save-button { min-width: 146px; min-height: 37px; margin-top: 12px; font-size: .72rem; }
+
+@media (max-width: 1400px) {
+  .health-monitor { width: 100%; margin-top: 0; }
+  .hm-detail-grid { grid-template-columns: 240px minmax(320px, 1fr) 310px; gap: 12px; }
+  .hm-tabs { gap: 10px; }
+  .hm-tabs button { padding: 0 15px; gap: 10px; }
+  .hm-vital-card { padding: 14px; }
+  .hm-vital-ring { width: 56px; height: 56px; }
+}
+
+@media (max-width: 1220px) {
+  .hm-detail-grid { grid-template-columns: 240px minmax(0, 1fr); }
+  .hm-record-card { grid-column: 1 / -1; height: auto; min-height: 440px; overflow: visible; }
+  .hm-tabs button { justify-content: center; padding: 0 10px; }
+  .hm-tabs button span { display: none; }
+}
+
+@media (max-width: 820px) {
+  .hm-live-card { grid-template-columns: 220px minmax(0, 1fr); }
+  .hm-live-value { font-size: 3rem; }
+  .hm-detail-grid { grid-template-columns: 1fr; }
+  .hm-vitals-list { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 120px); }
+  .hm-record-card { grid-column: auto; }
+}
+
+@media (max-width: 620px) {
+  .health-monitor { gap: 12px; }
+  .hm-live-card { min-height: 290px; grid-template-columns: 1fr; padding: 17px; }
+  .hm-live-copy { align-self: auto; }
+  .hm-heartbeat { height: 110px; }
+  .hm-heartbeat svg { height: 100px; }
+  .hm-tabs { gap: 7px; }
+  .hm-tabs button { min-height: 55px; border-radius: 15px; }
+  .hm-vitals-list { grid-template-columns: 1fr; grid-template-rows: repeat(4, 108px); }
+  .hm-vital-card { min-height: 108px; }
+  .hm-trend-card { min-height: 230px; padding: 16px 12px; }
+  .hm-record-card { padding: 17px; }
+  .hm-intensity > div { justify-content: space-between; }
+  .hm-intensity button { width: 18%; }
+}
+
+/* El monitor vive junto al navbar: responde al ancho real de su panel, no solo al viewport. */
+@container (max-width: 1100px) {
+  .hm-detail-grid { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); }
+  .hm-record-card {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, .85fr);
+    grid-template-areas:
+      "kicker illustration"
+      "copy illustration"
+      "button illustration"
+      "hint illustration";
+    column-gap: 28px;
+    height: auto;
+    min-height: 390px;
+    overflow: hidden;
+  }
+  .hm-record-card .hm-card-kicker { grid-area: kicker; align-self: end; }
+  .hm-record-copy { grid-area: copy; }
+  .hm-record-illustration { grid-area: illustration; width: min(115%, 480px); height: 100%; max-height: 350px; margin: auto; flex: none; }
+  .hm-record-card .hm-save-button { grid-area: button; align-self: end; }
+  .hm-record-hint { grid-area: hint; }
+}
+
+@container (max-width: 700px) {
+  .hm-detail-grid { grid-template-columns: 1fr; }
+  .hm-vitals-list { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, 120px); }
+  .hm-record-card {
+    display: flex;
+    grid-column: auto;
+    min-height: 610px;
+    padding: 20px;
+  }
+  .hm-record-illustration { width: min(120%, 470px); max-height: 300px; margin: 8px auto 14px; flex: 1 1 260px; }
+}
+
+@container (max-width: 480px) {
+  .hm-vitals-list { grid-template-columns: 1fr; grid-template-rows: repeat(4, 108px); }
+  .hm-record-card { min-height: 560px; padding: 17px; }
+  .hm-record-illustration { width: 112%; max-height: 255px; flex-basis: 220px; }
+  .hm-record-card .hm-save-button { min-height: 44px; }
+}

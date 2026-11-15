@@ -1,0 +1,354 @@
+.mind-tracker {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 28px;
+}
+
+.mind-tracker .glass-panel {
+  min-width: 0;
+  padding: 20px;
+  border-color: rgba(38, 180, 231, .38);
+  background: linear-gradient(145deg, rgba(8, 42, 81, .96), rgba(3, 20, 50, .96));
+  box-shadow: inset 0 1px rgba(88, 208, 248, .08), 0 16px 38px rgba(0, 5, 23, .25);
+}
+
+.mind-top-grid,
+.mind-bottom-grid {
+  display: grid;
+  gap: 14px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.mind-top-grid { grid-template-columns: minmax(0, 1.32fr) minmax(0, .85fr) minmax(0, 1.06fr); }
+.mind-bottom-grid { grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); }
+
+.mind-card-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 27px;
+  color: #9bdcfa;
+}
+
+.mind-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #a8def5;
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1.2;
+}
+
+.mind-kicker svg { width: 21px; height: 21px; flex: none; color: #44d9ff; filter: drop-shadow(0 0 8px rgba(49, 213, 255, .4)); }
+
+.mind-checkin-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 366px;
+}
+
+.mind-checkin-card::before {
+  position: absolute;
+  right: -14px;
+  bottom: -70px;
+  width: 44%;
+  height: 95%;
+  background: url('/assets/astronauta.png') center / contain no-repeat;
+  content: '';
+  opacity: .68;
+  filter: drop-shadow(0 0 28px rgba(82, 181, 255, .26));
+  pointer-events: none;
+}
+
+.mind-checkin-card::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 45%, rgba(2, 18, 47, .25));
+  content: '';
+  pointer-events: none;
+}
+
+.mind-date-field {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 5px;
+  max-width: 158px;
+  padding: 5px 9px;
+  border: 1px solid rgba(71, 188, 238, .38);
+  border-radius: 20px;
+  background: rgba(3, 25, 57, .88);
+  color: #92ddff;
+}
+
+.mind-date-field input {
+  width: 115px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #d9efff;
+  font-size: .67rem;
+  color-scheme: dark;
+}
+
+.mind-checkin-content { position: relative; z-index: 1; display: flex; flex: 1; flex-direction: column; align-items: flex-start; }
+.mind-checkin-content h2 { margin: 20px 0 5px; font-size: clamp(1.25rem, 1.7vw, 1.65rem); line-height: 1.12; }
+.mind-checkin-content > p,
+.mind-history-note { margin: 0; color: #9bbbd0; font-size: .7rem; line-height: 1.4; }
+.mind-choice-group { width: 100%; margin: 19px 0 0; padding: 0; border: 0; }
+.mind-choice-group legend { margin-bottom: 8px; color: #a8cce0; font-size: .63rem; }
+.mind-score-group legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.mind-score-options,
+.mind-mood-options { display: flex; flex-wrap: wrap; gap: 7px; }
+
+.mind-score-options button {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  width: 47px;
+  height: 52px;
+  padding: 2px;
+  border: 2px solid #347db9;
+  border-radius: 50%;
+  background: rgba(2, 20, 52, .84);
+  color: #65cfff;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+
+.mind-score-options button:first-child,
+.mind-score-options button:nth-child(2) { border-color: #8e73e7; color: #a68fff; }
+.mind-score-options button:nth-child(4) { border-color: #29b0df; }
+.mind-score-options button:nth-child(5) { border-color: #36dcfa; }
+.mind-score-options button span { height: 28px; font-family: Arial, sans-serif; font-size: 1.65rem; line-height: 1; }
+.mind-score-options button small { font-size: .56rem; font-weight: 700; line-height: 1; }
+.mind-score-options button:hover,
+.mind-score-options button.is-selected { transform: translateY(-2px); background: rgba(8, 83, 126, .75); box-shadow: 0 0 17px rgba(47, 217, 255, .6); }
+.mind-score-options button.is-selected { border-color: #47eaff; color: #eaffff; }
+
+.mind-word-group { margin-top: 17px; padding-top: 10px; border-top: 1px solid rgba(85, 160, 205, .2); }
+.mind-mood-options { gap: 6px; max-width: 72%; }
+.mind-mood-options button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(65, 155, 209, .4);
+  border-radius: 17px;
+  background: rgba(4, 30, 66, .82);
+  color: #c9e2ef;
+  cursor: pointer;
+  font-size: .66rem;
+}
+.mind-mood-options button:hover,
+.mind-mood-options button.is-selected { border-color: #35dfff; background: #35cdef; color: #041e37; box-shadow: 0 0 12px rgba(46, 213, 250, .45); }
+.mind-save-button { width: min(76%, 420px); min-height: 38px; margin-top: auto; font-size: .72rem; }
+
+.mind-scales-card { min-height: 366px; }
+.mind-scales { display: grid; gap: 5px; margin-top: 17px; }
+.mind-scale-input { display: grid; grid-template-columns: 22px minmax(0, 1fr) 88px; align-items: center; gap: 8px; min-height: 54px; }
+.mind-scale-icon { color: #64d7ff; }
+.mind-scale-input > span { display: grid; min-width: 0; gap: 2px; }
+.mind-scale-input strong { color: #d5e8f4; font-size: .73rem; line-height: 1.15; }
+.mind-scale-input small { color: #81a7bd; font-size: .56rem; line-height: 1.3; }
+.mind-scale-input select,
+.mind-journal-form input,
+.mind-journal-form textarea,
+.mind-reminder-form input,
+.mind-reminder-form select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(70, 170, 221, .48);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(2, 22, 51, .82);
+  color: #e4f4ff;
+  color-scheme: dark;
+}
+.mind-scale-input select { min-height: 33px; padding: 0 6px; font-size: .62rem; }
+
+.mind-journal-card { display: flex; min-height: 366px; flex-direction: column; }
+.mind-journal-form { display: grid; gap: 10px; margin-top: 18px; }
+.mind-journal-form input,
+.mind-reminder-form input,
+.mind-reminder-form select { min-height: 38px; padding: 0 10px; }
+.mind-journal-form textarea { min-height: 118px; resize: vertical; padding: 13px; font: inherit; font-size: .72rem; line-height: 1.5; }
+.mind-journal-form input:focus-visible,
+.mind-journal-form textarea:focus-visible { border-color: #45dafa; box-shadow: 0 0 0 3px rgba(48, 210, 249, .13); }
+.mind-dictation-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; }
+.mind-dictation-row button { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid rgba(75, 186, 231, .55); border-radius: 17px; background: rgba(5, 43, 81, .88); color: #c1ebfa; cursor: pointer; font-size: .66rem; }
+.mind-dictation-row button.is-listening { border-color: #58e0ff; color: #eaffff; box-shadow: 0 0 12px rgba(50, 207, 245, .35); }
+.mind-dictation-row button:disabled { opacity: .5; cursor: not-allowed; }
+.mind-dictation-row small { flex: 1 1 180px; color: #85a9bd; font-size: .58rem; line-height: 1.35; }
+.mind-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.mind-form-actions button,
+.mind-journal-list button,
+.mind-breath-controls button,
+.mind-reminder-list button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 31px;
+  padding: 0 9px;
+  border: 1px solid rgba(70, 174, 224, .44);
+  border-radius: 16px;
+  background: rgba(7, 42, 80, .85);
+  color: #c3e5f7;
+  cursor: pointer;
+  font-size: .62rem;
+}
+.mind-form-actions .primary-button { min-width: 84px; border: 0; color: #051e36; background: linear-gradient(110deg, #26b9ef, #48dffc); }
+.mind-journal-history-button { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; min-height: 62px; margin-top: 24px; padding: 10px 14px; border: 1px solid rgba(75, 186, 231, .44); border-radius: 13px; background: linear-gradient(100deg, rgba(13, 64, 106, .76), rgba(4, 32, 69, .78)); color: #d9f5ff; text-align: left; cursor: pointer; transition: border-color 160ms ease, background 160ms ease; }
+.mind-journal-history-button:hover { border-color: #49d9ff; background: rgba(12, 73, 118, .85); }
+.mind-journal-history-button:focus-visible,
+.mind-journal-dialog button:focus-visible { outline: 2px solid #64e7ff; outline-offset: 3px; }
+.mind-journal-history-button > span:first-child { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mind-journal-history-button svg { flex: none; color: #4bdafa; }
+.mind-journal-history-button > span:first-child > span { display: grid; gap: 3px; }
+.mind-journal-history-button strong { font-size: .7rem; }
+.mind-journal-history-button small { color: #91b9ce; font-size: .6rem; }
+.mind-journal-history-count { display: grid; flex: none; place-items: center; min-width: 31px; height: 31px; padding: 0 6px; border-radius: 50%; background: rgba(45, 208, 249, .16); color: #67e5ff; font-size: .68rem; font-weight: 800; }
+
+.mind-journal-dialog { width: min(900px, calc(100% - 28px)); height: min(720px, calc(100dvh - 40px)); margin: auto; padding: 25px; border: 1px solid rgba(57, 211, 255, .5); border-radius: 22px; background: linear-gradient(155deg, #0b315b, #041934 80%); color: #e2f3fc; box-shadow: 0 28px 90px rgba(0, 5, 20, .8), 0 0 35px rgba(41, 211, 255, .14); overflow: hidden; box-sizing: border-box; }
+.mind-journal-dialog[open] { display: flex; flex-direction: column; }
+.mind-journal-dialog::backdrop { background: rgba(0, 7, 25, .82); backdrop-filter: blur(9px); overscroll-behavior: none; }
+.mind-dialog-open,
+.mind-dialog-open body,
+.mind-dialog-open .app-shell-pro { overflow: hidden; }
+.mind-journal-dialog__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 17px; border-bottom: 1px solid rgba(91, 178, 215, .22); }
+.mind-journal-dialog__heading h2 { margin: 10px 0 5px; color: #f2fbff; font-size: 1.3rem; }
+.mind-journal-dialog__heading p,
+.mind-journal-dialog__note { margin: 0; color: #9dbbd0; font-size: .68rem; line-height: 1.5; }
+.mind-journal-dialog__close { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(70, 185, 230, .55); border-radius: 50%; background: rgba(5, 36, 73, .9); color: #b9e8fa; cursor: pointer; }
+.mind-journal-dialog__close:hover { border-color: #56dfff; color: white; }
+.mind-journal-dialog__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 12px; min-height: 0; padding: 18px 6px 12px 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.mind-journal-dialog__list article { padding: 16px; border: 1px solid rgba(71, 168, 217, .27); border-radius: 14px; background: rgba(3, 25, 55, .78); }
+.mind-journal-dialog__list time { display: inline-flex; align-items: center; gap: 7px; color: #68dcfc; font-size: .68rem; font-weight: 700; }
+.mind-journal-dialog__list article p { margin: 12px 0 15px; color: #d5e9f3; font-size: .75rem; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.mind-journal-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mind-journal-dialog__actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border: 1px solid rgba(66, 183, 228, .42); border-radius: 18px; background: rgba(11, 66, 105, .7); color: #caeafb; cursor: pointer; font-size: .66rem; }
+.mind-journal-dialog__actions button:hover { border-color: #51dfff; }
+.mind-journal-dialog__empty { grid-column: 1 / -1; margin: 12px 0 20px; color: #9fc6d8; font-size: .75rem; text-align: center; }
+.mind-journal-dialog__note { flex: none; padding-top: 14px; border-top: 1px solid rgba(91, 178, 215, .22); }
+
+.mind-weekly-card { min-height: 367px; }
+.mind-history-heading { align-items: flex-start; }
+.mind-history-note { margin-top: 5px; }
+.mind-range-tabs { display: flex; flex: none; padding: 2px; border: 1px solid rgba(58, 172, 221, .38); border-radius: 18px; background: rgba(2, 24, 53, .86); }
+.mind-range-tabs button { min-width: 61px; min-height: 29px; padding: 0 8px; border: 0; border-radius: 16px; background: transparent; color: #9dbed0; cursor: pointer; font-size: .65rem; }
+.mind-range-tabs button.is-selected { background: #38d7f8; color: #03243e; font-weight: 800; box-shadow: 0 0 14px rgba(45, 216, 255, .38); }
+.mind-chart-wrap { margin-top: 8px; }
+.mind-chart-legend { display: flex; justify-content: flex-end; gap: 16px; }
+.mind-chart-legend span { display: inline-flex; align-items: center; gap: 5px; color: #bdd6e4; font-size: .66rem; }
+.mind-chart-legend i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 9px currentColor; }
+.mind-chart-viewport { position: relative; min-width: 0; }
+.mind-line-chart { display: block; width: 100%; height: auto; max-height: 255px; overflow: visible; }
+.mind-chart-gridline { stroke: rgba(96, 163, 198, .2); stroke-width: 1; }
+.mind-chart-axis { fill: #8cb5ca; font-size: 11px; }
+.mind-chart-day { text-transform: capitalize; }
+.mind-chart-line { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 5px currentColor); }
+.mind-chart-empty { position: absolute; top: 42%; left: 50%; width: min(80%, 310px); margin: 0; transform: translate(-50%, -50%); color: #9bbdd0; font-size: .73rem; text-align: center; }
+
+.mind-wellness-card { display: flex; min-height: 367px; flex-direction: column; align-items: stretch; }
+.mind-breath {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 104px;
+  height: 104px;
+  margin-top: 10px;
+  border: 2px solid #2fd4fb;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(9, 77, 117, .75), rgba(3, 28, 65, .95));
+  box-shadow: 0 0 18px rgba(41, 207, 255, .42), inset 0 0 18px rgba(41, 207, 255, .12);
+  color: #e8f7ff;
+  cursor: pointer;
+}
+.mind-breath svg { margin-top: 7px; color: #51dfff; }
+.mind-breath span { display: grid; margin-top: -7px; font-size: .63rem; text-align: center; }
+.mind-breath strong { margin-top: 2px; font-size: .75rem; }
+.mind-breath.is-running { animation: mindBreathe 5s ease-in-out infinite alternate; }
+.mind-breath.is-paused { opacity: .7; }
+@keyframes mindBreathe { to { transform: scale(1.08); box-shadow: 0 0 32px rgba(82, 224, 255, .55); } }
+.mind-breath-controls { display: flex; justify-content: center; gap: 6px; margin-top: 9px; }
+.mind-breath-controls button:disabled { cursor: not-allowed; opacity: .45; }
+.mind-sound-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: center; gap: 6px; margin-top: 7px; padding: 3px 9px; border: 0; border-radius: 12px; background: transparent; color: #91c9dc; cursor: pointer; font-size: .6rem; }
+.mind-sound-toggle:hover { color: #c2f3ff; }
+.mind-wellness-card > p { margin: 8px 0 11px; color: #92aec0; font-size: .62rem; text-align: center; }
+.mind-wellness-task,
+.mind-reminder-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid rgba(71, 165, 216, .39); border-radius: 10px; background: rgba(3, 28, 62, .7); color: #d7e9f3; cursor: pointer; font-size: .67rem; }
+.mind-wellness-task span,
+.mind-reminder-toggle span { display: inline-flex; align-items: center; gap: 8px; }
+.mind-wellness-task svg,
+.mind-reminder-toggle svg { flex: none; color: #54cfff; }
+.mind-wellness-task small { color: #7bd6f6; font-size: .6rem; text-align: right; }
+.mind-wellness-task.is-complete { border-color: rgba(48, 219, 145, .55); }
+.mind-wellness-task.is-complete small { color: #72eeb5; }
+.mind-reminder-toggle { margin-top: 7px; }
+.mind-reminder-toggle[aria-expanded='true'] > svg { transform: rotate(180deg); }
+.mind-reminder-form { display: grid; gap: 7px; margin-top: 8px; padding: 9px; border: 1px solid rgba(71, 165, 216, .27); border-radius: 11px; background: rgba(2, 18, 46, .55); }
+.mind-reminder-list { display: grid; gap: 5px; max-height: 84px; margin-top: 7px; overflow-y: auto; }
+.mind-reminder-list article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px; padding: 5px; border-radius: 8px; background: rgba(3, 28, 62, .62); }
+.mind-reminder-list span { display: grid; min-width: 0; gap: 2px; }
+.mind-reminder-list strong { overflow-wrap: anywhere; font-size: .62rem; }
+.mind-reminder-list small { color: #83aabc; font-size: .56rem; }
+.mind-reminder-list button { width: 27px; min-height: 27px; padding: 0; }
+.mind-support-button { align-self: flex-start; margin-top: auto; padding: 4px 0 0; border: 0; background: transparent; color: #779aaf; font-size: .6rem; text-align: left; }
+
+@media (max-width: 1450px) {
+  .mind-top-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
+  .mind-journal-card { grid-column: 1 / -1; min-height: 0; }
+}
+
+@media (max-width: 1050px) {
+  .mind-bottom-grid { grid-template-columns: 1fr; }
+  .mind-wellness-card { min-height: 0; }
+}
+
+@media (max-width: 720px) {
+  .mind-top-grid { grid-template-columns: 1fr; }
+  .mind-journal-card { grid-column: auto; }
+  .mind-checkin-card::before { width: 42%; opacity: .45; }
+  .mind-mood-options { max-width: 100%; }
+  .mind-save-button { width: 100%; margin-top: 16px; }
+  .mind-journal-dialog { height: calc(100dvh - 24px); padding: 18px; }
+  .mind-journal-dialog__list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .mind-tracker { gap: 12px; }
+  .mind-tracker .glass-panel { padding: 15px; }
+  .mind-card-heading { flex-wrap: wrap; }
+  .mind-kicker { font-size: .69rem; }
+  .mind-checkin-card::before { right: -32px; bottom: -25px; width: 53%; height: 65%; opacity: .24; }
+  .mind-score-options button { width: 43px; height: 48px; }
+  .mind-score-options button span { font-size: 1.45rem; }
+  .mind-mood-options button { font-size: .62rem; }
+  .mind-scale-input { grid-template-columns: 22px minmax(0, 1fr) 82px; }
+  .mind-history-heading { gap: 8px; }
+  .mind-chart-legend { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .mind-line-chart { min-width: 0; }
+  .mind-journal-dialog { padding: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mind-breath.is-running { animation: none; }
+  .mind-score-options button { transition: none; }
+}
+
+.mind-demo-button {
+  padding: 4px 12px; border: 1px dashed rgba(75, 145, 194, .6); border-radius: 12px;
+  background: transparent; color: #9cc4dd; font-size: .7rem; cursor: pointer;
+}
+.mind-demo-button:hover { border-style: solid; color: #aee8ff; }
