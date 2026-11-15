@@ -28,6 +28,7 @@ def test_todos_los_indicadores_tienen_orientacion(client):
     assert codes == {i["code"] for i in INDICATORS}
     for item in data["indicators"]:
         assert item["what"] and item["purpose"] and item["attention"]
+        assert item["attention_source_ids"], item["code"]
         assert item["instruments"], item["code"]
         assert item["not_shown"], item["code"]
         assert item["actions"], item["code"]
